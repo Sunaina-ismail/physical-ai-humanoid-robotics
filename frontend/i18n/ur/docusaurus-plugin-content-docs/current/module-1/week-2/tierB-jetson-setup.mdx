@@ -1,0 +1,648 @@
+---
+title: "ٹیئر B توسیع: جیٹسن سیٹ اپ اور ROS 2 ڈیپلائمنٹ (Tier B Extension: Jetson Setup and ROS 2 Deployment)"
+chapter_number: "1.2B"
+module: 1
+sidebar_position: 2
+description: "ایچ جی اے آئی روبوٹکس ایپلی کیشنز کے لیے NVIDIA جیٹسن پلیٹ فارم پر ROS 2 نوڈس ڈیپلائی کریں۔"
+prerequisites:
+  - "چیپٹر 2: ROS 2 نوڈز اور ٹاپکس (Chapter 2: ROS 2 Nodes and Topics)"
+  - "Basic Linux command line"
+  - "Python fundamentals"
+learning_outcomes:
+  - "NVIDIA جیٹسن پلیٹ فارم پر ROS 2 ہیمبل کنفیگر کریں (Configure ROS 2 Humble on NVIDIA Jetson platform)"
+  - "جیٹسن ہارڈ ویئر پر ROS 2 نوڈس ڈیپلائی کریں (Deploy ROS 2 nodes to Jetson hardware for edge computing)"
+  - "ایچ جی اے آئی کنٹریکٹس کے لیے نوڈ کارکردگی کو بہتر بنائیں (Optimize node performance for edge AI constraints)"
+  - "جیٹسن مخصوص سینسرز اور پیریفرلز کو مربوط کریں (Integrate Jetson-specific sensors and peripherals)"
+estimated_time: 90
+tier_support:
+  A: true
+  B: true
+  C: false
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import TierBadge from '@site/src/components/TierBadge';
+
+# ٹیئر B توسیع: جیٹسن سیٹ اپ اور ROS 2 ڈیپلائمنٹ (Tier B Extension: Jetson Setup and ROS 2 Deployment)
+
+<TierBadge tiers={["B"]} />
+
+## یہ کیوں اہم ہے (Why This Matters)
+
+ایچ جی اے آئی روبوٹکس میں، کمپیو ٹیشنل ریسورسز کو پاور، تھرمل، اور جسمانی پابندیوں کے ذریعے محدود کیا جاتا ہے۔ NVIDIA جیٹسن پلیٹ فارم (نینو، زیویئر NX، اورن) لیپ ٹاپ سیمولیشن اور جسمانی روبوٹ ڈیپلائمنٹ کے درمیان پُل کا کام کرتے ہیں، GPU-ایکسلریٹڈ انفریس فراہم کرتے ہوئے جبکہ مناسب پاور استعمال برقرار رکھتے ہیں (~5-30W)۔ جیٹسن ڈیپلائمنٹ کو سمجھنا روبوٹکس انجینئرز کے لیے ضروری ہے جو اصل ہارڈ ویئر کنٹریکٹس کے لیے الگورتھم کو بہتر بنانا چاہتے ہیں۔
+
+**اصل دنیا کی ایپلی کیشنز (Real-World Applications)**:
+- **خود کار ڈرون (Autonomous Drones)**: ریل ٹائم آبجیکٹ ڈیٹیکشن کے ساتھ جیٹسن پاورڈ نیوی گیشن
+- **ویئر ہاؤس روبوٹس (Warehouse Robots)**: رکاوٹ ڈیٹیکشن اور راستہ منصوبہ بندی کے لیے ایچ جی انفریس
+- **ایگریکلچرل روبوٹکس (Agricultural Robotics)**: فصل کی نگرانی اور کٹائی کے لیے آن بورڈ پروسیسنگ
+
+:::danger ہارڈ ویئر سیفٹی
+کسی بھی جیٹسن ہارڈ ویئر کو پاور دینے سے پہلے، یقینی بنائیں:
+- مناسب پاور سپلائی استعمال کریں (جیٹسن کی سرکاری پاور اڈاپٹر تجویز کردہ ہے)
+- ترقی یافتہ کیریئر بورڈ پر صحیح وولٹیج ترتیبات کی تصدیق کریں
+- کافی ہوائی اور تھرمل مینجمنٹ کو یقینی بنائیں
+- ایمرجنسی اسٹاپ طریقہ کار کو دستاویزی اور قابل رسائی رکھیں
+:::
+
+---
+
+## جیٹسن پلیٹ فارم کا جائزہ (Jetson Platform Overview)
+
+### ہارڈ ویئر تخصیصات کا موازنہ (Hardware Specifications Comparison)
+
+| پلیٹ فارم | GPU | CPU | RAM | پاور | بنیادی استعمال کا کیس |
+|----------|-----|-----|-----|-------|------------------|
+| جیٹسن نینو | 128-کور میکس ویل | Quad-core ARM A57 | 4GB LPDDR4 | 5-10W | ابتدائی سطح کا انفریس |
+| جیٹسن زیویئر NX | 384-کور وولٹا | Hexa-core ARM Carmel | 8GB LPDDR4 | 10-15W | درمیانی پیچیدگی کا AI |
+| جیٹسن اورن NX | 1024-کور ایڈا | Hexa-core ARM Cortex-A78AE | 8GB LPDDR5 | 15-25W | ہائی کارکردگی والے روبوٹکس |
+
+### ایچ جی اے آئی کنٹریکٹس بمقابلہ لیپ ٹاپ سیمولیشن (Edge AI Constraints vs. Laptop Simulation)
+
+آپ کے لیپ ٹاپ سیمولیشن ماحول کے برعکس، جیٹسن پلیٹ فارم میں ROS 2 نوڈ ڈیزائن کو متاثر کرنے والی مخصوص پابندیاں ہیں:
+
+<MermaidDiagram
+  id="jetson-constraints"
+  type="graph"
+  source={`graph TD
+    A[Resource Constraints] --> B[Thermal: Limited cooling]
+    A --> C[Power: 5-30W budget]
+    A --> D[Compute: Optimized for inference]
+    B --> E[Node: Reduce CPU/GPU usage]
+    C --> F[Network: Minimize data transfer]
+    D --> G[Algorithms: Optimize for ARM architecture]
+
+    style A fill:#e1f5ff
+    style E fill:#fff4e1
+    style F fill:#fff4e1
+    style G fill:#fff4e1
+  `}
+  altText="Resource constraints on Jetson platforms: thermal limitations requiring reduced CPU/GPU usage, power budget of 5-30W requiring minimized network data transfer, and compute optimization for ARM architecture."
+  caption="جیٹسن پلیٹ فارم پر ایچ جی اے آئی کنٹریکٹس لیپ ٹاپ سیمولیشن ماحولوں کے مقابلے میں۔"
+/>
+
+---
+
+## جیٹسن سیٹ اپ عمل (Jetson Setup Process)
+
+### ابتدائی ہارڈ ویئر سیٹ اپ (Initial Hardware Setup)
+
+1. **اون پیک اور انسپیکٹ کریں**: تمام اجزاء کی تصدیق کریں (جیٹسن ماڈیول، کیریئر بورڈ، پاور سپلائی، ایس ڈی کارڈ)
+2. **پیریفرلز منسلک کریں**: پاور سپلائی، نیٹ ورک کیبل، کی بورڈ، ماؤس، مانیٹر (HDMI) منسلک کریں
+3. **ایس ڈی کارڈ داخل کریں**: جیٹسن نینو کے لیے، پہلے سے فلیش کردہ OS کے ساتھ مائیکرو ایس ڈی کارڈ داخل کریں
+4. **پاور آن کریں**: پاور سپلائی منسلک کریں اور پاور بٹن دبائیں (اگر دستیاب ہو)
+
+### جیٹسن OS کو فلیش کرنا (Flashing the Jetson OS)
+
+جیٹسن نینو کے SD-CARD ماڈل کے لیے، NVIDIA پیش فلیش کردہ ایس ڈی کارڈ امیج فراہم کرتا ہے:
+
+```bash
+# 1. NVIDIA ڈویلپر ویب سائٹ سے JetPack SDK مینیجر ڈاؤن لوڈ کریں
+# 2. SDK مینیجر کو اپنے میزبان کمپیوٹر (لینکس/ویںڈوز/میک) پر انسٹال کریں
+# 3. جیٹسن کو USB کے ذریعے میزبان سے منسلک کریں
+# 4. جیٹسن کو ریکوری موڈ میں رکھیں (RECOVERY بٹن دبائیں، RESET بٹن دبائیں)
+# 5. SDK مینیجر جیٹسن کا پتہ لگائے گا اور فلیش کرنے کی اجازت دے گا
+
+# متبادل: کمانڈ لائن سے فلیش کریں
+sudo ./flash.sh jetson-nano-sd mmcblk0p1
+```
+
+### ابتدائی سسٹم کنفیگریشن (Initial System Configuration)
+
+پہلے بوٹ کے بعد، جیٹسن سسٹم کو کنفیگر کریں:
+
+```bash
+# 1. صارف اکاؤنٹ اور پاس ورڈ سیٹ کریں
+# 2. WiFi یا Ethernet سے منسلک ہوں
+# 3. سسٹم پیکجز اپ ڈیٹ کریں
+sudo apt update && sudo apt upgrade -y
+
+# 4. پاور موڈ کنفیگر کریں (نینو کے لیے)
+sudo nvpmodel -m 0  # زیادہ سے زیادہ کارکردگی کا موڈ
+sudo jetson_clocks  # کلاکس کو زیادہ سے زیادہ کارکردگی پر لاک کریں
+# 5. GPU تک رسائی کی تصدیق کریں
+nvidia-smi
+```
+
+---
+
+## جیٹسن پر ROS 2 ہیمبل انسٹالیشن (ROS 2 Humble Installation on Jetson)
+
+### ضروری اجزاء کی انسٹالیشن (Prerequisites Installation)
+
+```bash
+# پیکج لسٹس اپ ڈیٹ کریں
+sudo apt update
+
+# لوکل ضروریات انسٹال کریں
+sudo apt install locales
+sudo locale-gen en_US en_US.UTF-8
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+
+# ROS 2 apt ذخیرہ اضافہ کریں
+sudo apt install software-properties-common
+sudo add-apt-repository universe
+
+# curl اور OS مخصوص پیکجز انسٹال کریں
+sudo apt install curl gnupg lsb-release
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+# ROS 2 ذخیرہ کو ذرائع کی فہرست میں شامل کریں
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(source /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# پیکج لسٹس دوبارہ اپ ڈیٹ کریں
+sudo apt update
+```
+
+### ROS 2 ہیمبل انسٹال کریں (Install ROS 2 Humble)
+
+```bash
+# ROS 2 بیس پیکجز انسٹال کریں
+sudo apt install ros-humble-ros-base
+
+# روبوٹکس کے لیے اضافی پیکجز انسٹال کریں
+sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
+sudo apt install ros-humble-rosbridge-suite ros-humble-teleop-tools
+
+# Python ترقی یافتہ پیکجز انسٹال کریں
+sudo apt install python3-argcomplete python3-colcon-common-extensions
+sudo apt install python3-rosdep python3-rosinstall python3-rosinstall-generator
+```
+
+### ماحول سیٹ اپ (Environment Setup)
+
+```bash
+# bashrc میں ROS 2 سیٹ اپ شامل کریں
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+# Python پیکجز انسٹال کریں
+pip3 install --upgrade pip
+pip3 install rclpy sensor-msgs geometry-msgs cv-bridge
+```
+
+---
+
+## جیٹسن کے لیے ROS 2 نوڈس کو بہتر بنانا (Optimizing ROS 2 Nodes for Jetson)
+
+### ریسورس ایوار نوڈ ڈیزائن (Resource-Aware Node Design)
+
+جب ROS 2 نوڈس کو جیٹسن پر ڈیپلائی کیا جاتا ہے، تو ان بہترین حکمت عملیوں پر غور کریں:
+
+<MermaidDiagram
+  id="node-optimization"
+  type="flowchart"
+  source={`flowchart TD
+    A[Node Creation] --> B[Threading Strategy]
+    A --> C[QoS Configuration]
+    A --> D[Message Size Optimization]
+
+    B --> E[Use single-threaded executor<br/>to reduce overhead]
+    C --> F[Use BEST_EFFORT for<br/>high-frequency sensor data]
+    D --> G[Compress images before<br/>publishing to /image_raw]
+
+    E --> H[Deployed Node]
+    F --> H
+    G --> H
+
+    style A fill:#e1f5ff
+    style H fill:#f0ffe1
+  `}
+  altText="Node optimization process for Jetson deployment: threading strategy with single-threaded executor, QoS configuration with best-effort for high-frequency data, and message size optimization through image compression."
+  caption="جیٹسن کے پلیٹ فارم پر ROS 2 نوڈس ڈیپلائی کرنے کے لیے بہترین حکمت عملیاں جو ریسورس کی پابندیوں والے جیٹسن پلیٹ فارم کے لیے ہیں۔"
+/>
+
+### مثال: جیٹسن کے لیے بہترین امیج پبلشر (Example: Optimized Image Publisher for Jetson)
+
+<CodeExample
+  language="python"
+  title="jetson_camera_publisher.py"
+  tier="B"
+  description="ROS 2 پبلشر جو جیٹسن ہارڈ ویئر کے لیے بہترین ہے کم ریسورس استعمال کے ساتھ۔"
+>
+```python
+#!/usr/bin/env python3
+"""
+Jetson-Optimized Camera Publisher Node
+
+This node is optimized for Jetson hardware constraints:
+- Single-threaded execution to reduce overhead
+- Image compression to minimize bandwidth
+- Reduced frame rate to conserve CPU/GPU
+- Proper QoS settings for edge deployment
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+
+class JetsonCameraPublisher(Node):
+    """Camera publisher optimized for Jetson hardware constraints."""
+
+    def __init__(self):
+        super().__init__('jetson_camera_publisher')
+
+        # Create QoS profile optimized for edge computing
+        # BEST_EFFORT for high-frequency sensor data to reduce network overhead
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,  # Minimal buffering to save memory
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        # Create publisher with optimized QoS
+        self.publisher = self.create_publisher(
+            Image,
+            '/jetson/camera/image_raw',
+            qos_profile
+        )
+
+        # Initialize OpenCV bridge for image conversion
+        self.bridge = CvBridge()
+
+        # Use timer for controlled frame rate (lower than desktop to conserve resources)
+        # 5 FPS instead of 30 FPS to reduce CPU/GPU usage
+        self.timer = self.create_timer(0.2, self.publish_camera_image)  # 5 Hz
+
+        # Initialize camera (adjust device index as needed)
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            self.get_logger().error('Could not open camera')
+            return
+
+        # Set lower resolution to reduce processing load
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        self.get_logger().info('Jetson-optimized camera publisher started')
+
+    def publish_camera_image(self):
+        """Publish camera image with Jetson-specific optimizations."""
+        ret, frame = self.cap.read()
+        if not ret:
+            self.get_logger().warn('Failed to read from camera')
+            return
+
+        # Convert OpenCV image to ROS Image message
+        try:
+            ros_image = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+            ros_image.header.stamp = self.get_clock().now().to_msg()
+
+            # Publish with resource-conscious approach
+            self.publisher.publish(ros_image)
+
+        except Exception as e:
+            self.get_logger().error(f'Error converting image: {e}')
+
+    def destroy_node(self):
+        """Clean up resources when node is destroyed."""
+        if self.cap.isOpened():
+            self.cap.release()
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    # Use single-threaded executor to minimize overhead on constrained hardware
+    node = JetsonCameraPublisher()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Node stopped by user')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+### جیٹسن پر کارکردگی کی نگرانی (Performance Monitoring on Jetson)
+
+```bash
+# Monitor Jetson performance during ROS 2 operation
+sudo tegrastats  # Real-time CPU/GPU/memory usage
+
+# ROS 2 specific monitoring
+ros2 topic hz /jetson/camera/image_raw  # Check actual publish rate
+ros2 node info /jetson_camera_publisher  # Check node status
+ros2 lifecycle list /jetson_camera_publisher  # Check lifecycle state
+
+# System resource monitoring
+jtop  # Jetson-specific system monitor (install with: sudo -H pip install jtop)
+```
+
+---
+
+## جیٹسن مخصوص سینسر انٹیگریشن (Jetson-Specific Sensor Integration)
+
+### عام جیٹسن سینسرز اور ROS 2 ڈرائیورز (Common Jetson Sensors and ROS 2 Drivers)
+
+| سینسر کی قسم | جیٹسن انٹرفیس | ROS 2 پیکیج | استعمال کا کیس |
+|-------------|------------------|---------------|----------|
+| CSI کیمرہ | MIPI CSI-2 | `nvidia_isaac_ros_gmsl` | ہائی بینڈ وڈتھ کیمرہ |
+| USB کیمرہ | USB 3.0 | `usb_cam` | معیاری ویب کیمرہ انٹیگریشن |
+| لیڈار | UART/SPI | `sllidar_ros2` | 2D میپنگ اور نیوی گیشن |
+| IMU | I2C/SPI | `imu_tools` | اورینٹیشن اور اسٹیبلائزیشن |
+
+### مثال: USB کیمرہ انٹیگریشن (Example: USB Camera Integration)
+
+```bash
+# Install USB camera package
+sudo apt install ros-humble-usb-cam
+
+# Launch USB camera node with Jetson-specific parameters
+ros2 run usb_cam usb_cam_node_exe \
+  --ros-args \
+  -p video_device:=/dev/video0 \
+  -p framerate:=5 \  # Lower frame rate for Jetson
+  -p image_width:=640 \
+  -p image_height:=480 \
+  -p pixel_format:=yuyv \
+  -r /usb_cam/image_raw:=/jetson/camera/image_raw
+```
+
+---
+
+## عملی مشق: جیٹسن پر ROS 2 نوڈ ڈیپلائی کریں (Hands-On Exercise: Deploy ROS 2 Node to Jetson)
+
+### مقصد (Objective)
+
+چیپٹر 2 سے ٹیمپریچر مانیٹرنگ سسٹم کو اپنے جیٹسن پلیٹ فارم پر ڈیپلائی کریں اور ایچ جی کمپیوٹنگ کنٹریکٹس کے لیے اسے بہتر بنائیں۔
+
+### ضروریات (Requirements)
+
+1. **ہارڈ ویئر سیٹ اپ**: جیٹسن نینو/NX/AGX Ubuntu 20.04 اور ROS 2 ہیمبل کے ساتھ
+2. **نیٹ ورک کنفیگریشن**: جیٹسن وہی نیٹ ورک سے منسلک جس سے ترقی یافتہ مشین ہے
+3. **ROS 2 انسٹالیشن**: جیٹسن پر مکمل ROS 2 ہیمبل انسٹالیشن
+4. **کراس پلیٹ فارم کمیونیکیشن**: لیپ ٹاپ اور جیٹسن کے درمیان کمیونیکیشن کے لیے ROS 2 کو کنفیگر کریں
+
+### نافذ کاری کے اقدامات (Implementation Steps)
+
+<Exercise
+  id="ex-jetson-deployment"
+  title="Jetson ROS 2 Deployment"
+  difficulty="intermediate"
+  variants={[
+    {
+      tier: "B",
+      description: "Deploy and optimize temperature monitoring system on Jetson hardware",
+      setup: "Ensure Jetson is powered on, connected to network, and ROS 2 Humble is installed",
+      code: `#!/usr/bin/env python3
+# jetson_temp_monitor.py - Optimized for Jetson constraints
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from std_msgs.msg import Float32
+import random
+import time
+
+class JetsonTempMonitor(Node):
+    def __init__(self):
+        super().__init__('jetson_temp_monitor')
+
+        # Optimize QoS for edge deployment
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        self.publisher = self.create_publisher(Float32, '/jetson/temperature', qos_profile)
+        self.timer = self.create_timer(2.0, self.publish_temp)  # Lower frequency for Jetson
+
+        self.get_logger().info('Jetson Temperature Monitor started')
+
+    def publish_temp(self):
+        msg = Float32()
+        # Simulate temperature sensor with realistic range for Jetson under load
+        msg.data = 35.0 + random.uniform(0.0, 10.0)  # 35-45°C typical for Jetson
+        self.publisher.publish(msg)
+        self.get_logger().info(f'Jetson Temp: {msg.data:.2f}°C')
+
+def main():
+    rclpy.init()
+    node = JetsonTempMonitor()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down')
+    node.destroy_node()
+    rclpy.shutdown()
+      `,
+      acceptanceCriteria: [
+        "ROS 2 node runs successfully on Jetson hardware",
+        "Node uses optimized QoS settings for edge deployment",
+        "Temperature data publishes at appropriate frequency (not too high for Jetson)",
+        "Node can be monitored from development laptop using ROS 2 tools"
+      ],
+      solution: "Verify with: ros2 topic echo /jetson/temperature on your laptop while node runs on Jetson"
+    }
+  ]}
+/>
+
+### کراس پلیٹ فارم کمیونیکیشن سیٹ اپ (Cross-Platform Communication Setup)
+
+اپنے لیپ ٹاپ اور جیٹسن کے درمیان بات چیت کے لیے:
+
+```bash
+# On both machines, set the same ROS domain
+export ROS_DOMAIN_ID=1
+
+# On your laptop, set ROS to find the Jetson
+export ROS_IP=<JETSON_IP_ADDRESS>  # Replace with actual Jetson IP
+
+# On Jetson, set ROS to find the laptop
+export ROS_IP=<LAPTOP_IP_ADDRESS>  # Replace with actual laptop IP
+
+# Verify communication
+# From laptop: ros2 topic list (should show Jetson topics)
+# From Jetson: ros2 topic list (should show laptop topics)
+```
+
+---
+
+## کارکردگی کو بہتر بنانے کی حکمت عملیاں (Performance Optimization Strategies)
+
+### جیٹسن پر میموری مینجمنٹ (Memory Management on Jetson)
+
+```python
+# Example: Memory-efficient image processing on Jetson
+import numpy as np
+import cv2
+
+def process_image_jetson_optimized(raw_image):
+    """
+    Memory-efficient image processing for Jetson constraints.
+    Avoids creating unnecessary copies of large arrays.
+    """
+    # Process in-place when possible
+    small_image = cv2.resize(raw_image, (320, 240))  # Reduce size early
+
+    # Use numpy operations efficiently
+    gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
+
+    # Apply processing with minimal memory overhead
+    edges = cv2.Canny(gray, 50, 150)
+
+    return edges
+```
+
+### CPU/GPU لوڈ بیلنسنگ (CPU/GPU Load Balancing)
+
+```bash
+# Monitor and control CPU/GPU usage on Jetson
+sudo nvpmodel -q  # Query current power model
+sudo nvpmodel -m 0  # Set to maximum performance mode
+sudo jetson_clocks  # Lock to maximum clocks (use carefully)
+
+# For thermal management, consider lower power modes
+sudo nvpmodel -m 1  # Balanced mode
+sudo jetson_clocks --restore  # Restore default clocks
+```
+
+---
+
+## عام جیٹسن مسائل کا حل (Troubleshooting Common Jetson Issues)
+
+### کارکردگی کے مسائل (Performance Issues)
+
+**مسئلہ**: ROS 2 نوڈس کا جیٹسن پر سست چلنا
+**حل**:
+- `sudo tegrastats` کے ساتھ تھرمل تھروٹلنگ چیک کریں
+- نوڈ فریکوینسی کم کریں (publish/subscribe شرح)
+- امیج پروسیسنگ کو بہتر بنائیں (ریزولوشن کم کریں، کارآمد الگورتھم استعمال کریں)
+- اوور ہیڈ کم کرنے کے لیے سنگل تھریڈیڈ ایکزیکیوٹر استعمال کریں
+
+### نیٹ ورک کمیونیکیشن کے مسائل (Network Communication Issues)
+
+**مسئلہ**: لیپ ٹاپ اور جیٹسن ROS 2 کے ذریعے بات نہیں کر سکتے
+**حل**:
+- تصدیق کریں کہ دونوں مشینیں ایک ہی نیٹ ورک پر ہیں
+- تصدیق کریں کہ ROS_DOMAIN_ID دونوں مشینوں پر مماثل ہے
+- یقینی بنائیں کہ فائر وال ROS 2 ٹریفک کی اجازت دیتا ہے (پورٹس 11311 اور بے ترتیب ہائی پورٹس)
+- `ping <jetson_ip>` سے ٹیسٹ کریں لیپ ٹاپ سے جیٹسن اور اس کے برعکس
+
+### ریسورس کنٹریکٹس (Resource Constraints)
+
+**مسئلہ**: جیٹسن میموری یا CPU ختم ہو رہا ہے
+**حل**:
+- `jtop` کے ساتھ مانیٹر کریں تاکہ باؤچس کی پہچان ہو
+- امیج ریزولوشن/فریم کی شرح کم کریں
+- زیادہ کارآمد ڈیٹا ٹائپس استعمال کریں (Float64 کے بجائے Float32)
+- بافرنگ کم کرنے کے لیے مناسب QoS پالیسیاں نافذ کریں
+
+---
+
+## خلاصہ (Summary)
+
+**جیٹسن ڈیپلائمنٹ کے لیے کلیدی نکات (Key Takeaways for Jetson Deployment)**:
+
+- **ریسورس کنٹریکٹس**: جیٹسن پلیٹ فارم میں تھرمل، پاور، اور کمپیوٹ کی پابندیاں ہیں جو ROS 2 نوڈس کو بہتر بنانے کی ضرورت رکھتی ہیں
+- **QoS بہترین**: ہائی فریکوینسی ڈیٹا کے لیے BEST_EFFORT استعمال کریں اور ریسورسز کو بچانے کے لیے کم بافرنگ استعمال کریں
+- **کارکردگی کی نگرانی**: جیٹسن مخصوص میٹرکس کو مانیٹر کرنے کے لیے `tegrastats` اور `jtop` استعمال کریں
+- **کراس پلیٹ فارم کمیونیکیشن**: لیپ ٹاپ-جیٹسن کمیونیکیشن کے لیے ROS_DOMAIN_ID اور نیٹ ورک ترتیبات کو کنفیگر کریں
+- **سیفٹی پہل**: ہارڈ ویئر پر ڈیپلائمنٹ کرتے وقت ہمیشہ مناسب تھرمل مینجمنٹ اور ایمرجنسی طریقہ کار نافذ کریں
+
+**اگلے اقدامات (Next Steps)**:
+جیٹسن ڈیپلائمنٹ میں مہارت حاصل کرنے کے بعد، آپ Module 2 میں زیادہ پیچیدہ سینسر انٹیگریشن اور Module 3 میں نیوی گیشن سسٹم کے لیے تیار ہوں گے۔ یہاں سیکھی گئی بہترین تکنیکیں وسائل کی پابندی والے ہارڈ ویئر پر جامع روبوٹکس الگورتھم ڈیپلائی کرنے کے لیے ضروری ہوں گی۔
+
+---
+
+## کوئز (Quiz)
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'لیپ ٹاپ سیمولیشن کے مقابلے میں روبوٹکس کے لیے NVIDIA جیٹسن پلیٹ فارم استعمال کرنے کا بنیادی فائدہ کیا ہے؟',
+      options: [
+        'بے حد کمپیو ٹیشنل طاقت',
+        'GPU-ایکسلریٹڈ انفریس کے ساتھ مناسب پاور استعمال (~5-30W)',
+        'ہائی اینڈ گیمنگ لیپ ٹاپس کے ساتھ ہم آہنگ کارکردگی',
+        'کوئی تھرمل یا پاور کنٹریکٹس نہیں'
+      ],
+      correctAnswer: 1,
+      explanation: 'جیٹسن پلیٹ فارم GPU-ایکسلریٹڈ انفریس فراہم کرتے ہیں جبکہ مناسب پاور استعمال (~5-30W) برقرار رکھتے ہیں، سیمولیشن اور جسمانی روبوٹ ڈیپلائمنٹ کے درمیان پُل بناتے ہیں۔ یہ ایچ جی اے آئی روبوٹکس ایپلی کیشنز کے لیے مناسب ہیں۔',
+      hint: 'ایچ جی کے کنٹریکٹس پر "Why This Matters" سیکشن کا جائزہ لیں۔'
+    },
+    {
+      id: 'q2',
+      question: 'جیٹسن پر وسائل کے استعمال کو بہتر بنانے کے لیے ہائی فریکوینسی سینسر ڈیٹا کے لیے آپ کون سی QoS پالیسی استعمال کریں گے؟',
+      options: [
+        'RELIABLE - ہر پیغام کا پہنچنا یقینی',
+        'BEST_EFFORT - بھیجیں اور بھول جائیں، اوور ہیڈ کم کریں',
+        'KEEP_ALL تاریخ - تمام پیغامات کو بافر کریں',
+        'TRANSIENT_LOCAL durability - آخری پیغام ذخیرہ کریں'
+      ],
+      correctAnswer: 1,
+      explanation: 'ریسورس کی پابندی والے جیٹسن پلیٹ فارم پر ہائی فریکوینسی سینسر ڈیٹا کے لیے BEST_EFFORT بہترین ہے۔ یہ نیٹ ورک اوور ہیڈ کم کرتا ہے اور ایچ ہارڈ ویئر پر کارکردگی کو متاثر کرنے والی بافر بلو کو روکتا ہے۔',
+      hint: 'QoS پالیسیوں کو منتخب کرتے وقت جیٹسن پلیٹ فارم کی وسائل کی پابندیوں پر غور کریں۔'
+    },
+    {
+      id: 'q3',
+      question: 'جیٹسن ہارڈ ویئر پر ڈیپلائی کیے گئے ROS 2 نوڈس کے لیے تھریڈنگ کا تجویز کردہ نقطہ نظر کیا ہے؟',
+      options: [
+        'زیادہ سے زیادہ کارکردگی کے لیے ملٹی تھریڈیڈ ایکزیکیوٹر',
+        'اوور ہیڈ کم کرنے کے لیے سنگل تھریڈیڈ ایکزیکیوٹر',
+        'ہر نوڈ کے لیے حسب ضرورت تھریڈنگ ماڈل',
+        'کوئی مخصوص تھریڈنگ سفارشات نہیں'
+      ],
+      correctAnswer: 1,
+      explanation: 'ریسورس کی پابندی والے ہارڈ ویئر پر اوور ہیڈ کم کرنے کے لیے جیٹسن ڈیپلائمنٹ کے لیے سنگل تھریڈیڈ ایکزیکیوٹر کی سفارش کی جاتی ہے۔ یہ ملٹی تھریڈیڈ نقطہ نظر کے مقابلے میں پیچیدگی اور وسائل کے استعمال کو کم کرتا ہے۔',
+      hint: '"Optimizing ROS 2 Nodes for Jetson" سیکشن کا جائزہ لیں۔'
+    },
+    {
+      id: 'q4',
+      question: 'جیٹسن پلیٹ فارم پر CPU/GPU استعمال کی ریل ٹائم نگرانی کے لیے کون سا کمانڈ استعمال کیا جاتا ہے؟',
+      options: [
+        'top',
+        'htop',
+        'tegrastats',
+        'nvidia-smi'
+      ],
+      correctAnswer: 2,
+      explanation: 'tegrastats ریل ٹائم مانیٹرنگ کے لیے جیٹسن مخصوص کمانڈ ہے CPU، GPU، میموری، اور پاور استعمال کا۔ یہ جیٹسن پلیٹ فارم کارکردگی کے بارے میں تفصیلی معلومات فراہم کرتا ہے۔',
+      hint: 'کارکردگی کے سیکشن میں جیٹسن مخصوص مانیٹرنگ ٹولز تلاش کریں۔'
+    },
+    {
+      id: 'q5',
+      question: 'کسی بھی جیٹسن ہارڈ ویئر کو پاور دینے سے پہلے آپ کیا کریں گے؟',
+      options: [
+        'فوری طور پر تمام ROS 2 پیکجز انسٹال کریں',
+        'کارکردگی کے بینچ مارکس چلائیں',
+        'مناسب پاور سپلائی، وولٹیج ترتیبات، اور ہوائی کی تصدیق کریں',
+        'سب سے پہلے انٹرنیٹ سے منسلک ہوں'
+      ],
+      correctAnswer: 2,
+      explanation: 'جیٹسن ہارڈ ویئر کو پاور دینے سے پہلے، یقینی بنائیں کہ آپ مناسب پاور سپلائی استعمال کر رہے ہیں، ترقی یافتہ کیریئر بورڈ پر صحیح وولٹیج ترتیبات کی تصدیق کریں، اور کافی ہوائی کو یقینی بنائیں۔ ہارڈ ویئر ڈیپلائمنٹ میں سیفٹی پہلے آتی ہے۔',
+      hint: 'چیپٹر کے آغاز پر سیفٹی کی انتباہ دیکھیں۔'
+    }
+  ]}
+/>
+
+---
+
+## اگلا کیا ہے؟ (What's Next?)
+
+**Module 2, Week 6-7** میں، آپ ڈیجیٹل ٹوئنز اور سیمولیشن ماحولوں کو تلاش کریں گے۔ جیٹسن ڈیپلائمنٹ کے مہارت جو آپ نے سیکھی ہے وہ ایچ ہارڈ ویئر پر سیمولیشن-ٹو-ریالٹی ٹرانسفر الگورتھم ڈیپلائی کرتے وقت قیمتی ہوں گی۔
+
+**Module 3, Week 8-10** میں، آپ Nav2 کے ساتھ نیوی گیشن سسٹم کے ساتھ کام کریں گے۔ اس چیپٹر سے بہترین تکنیکیں وسائل کی پابندی والے پلیٹ فارم پر نیوی گیشن الگورتھم ڈیپلائی کرنے کے لیے ضروری ہوں گی۔
+
+:::tip اگلے اقدامات کے لیے تیاری
+اپنے لیپ ٹاپ اور جیٹسن کے درمیان کراس پلیٹ فارم کمیونیکیشن سیٹ اپ کا مشق کریں۔ یہ اہم ہوگا جب آپ سیمولیشن اور حقیقی دنیا کے سسٹم کو مربوط کرنا شروع کریں گے۔
+:::
+
+---

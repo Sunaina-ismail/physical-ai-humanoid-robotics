@@ -1,0 +1,943 @@
+---
+title: "Tier B Extension: Real Sensor Integration on Jetson"
+chapter_number: "2.2B"
+module: 2
+sidebar_position: 2
+description: "Integrate real sensors with ROS 2 on NVIDIA Jetson platforms for edge AI robotics applications."
+prerequisites:
+  - "Module 1 content on ROS 2 nodes"
+  - "Jetson setup and deployment (Tier B content)"
+  - "Basic understanding of sensor_msgs package"
+learning_outcomes:
+  - "Connect and configure real sensors to Jetson platforms"
+  - "Publish sensor data to ROS 2 topics with proper calibration"
+  - "Optimize sensor data processing for edge computing constraints"
+  - "Implement sensor fusion techniques on resource-limited hardware"
+estimated_time: 120
+tier_support:
+  A: true
+  B: true
+  C: false
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import TierBadge from '@site/src/components/TierBadge';
+
+# Tier B Extension: Real Sensor Integration on Jetson
+
+<TierBadge tiers={["B"]} />
+
+## Why This Matters
+
+Real-world robotics requires integration with physical sensors that provide environmental perception capabilities. Unlike simulation environments where sensors are perfectly modeled, real sensors have noise, calibration requirements, and resource constraints. The NVIDIA Jetson platform bridges the gap between simulation and reality by providing GPU-accelerated processing for sensor data while maintaining reasonable power consumption.
+
+**Real-World Applications**:
+- **Autonomous Vehicles**: LiDAR, camera, and IMU fusion for navigation
+- **Warehouse Automation**: Multi-sensor perception for inventory tracking
+- **Agricultural Robotics**: Environmental sensors for crop monitoring
+- **Search and Rescue**: Multi-modal sensor fusion in GPS-denied environments
+
+:::danger Hardware Safety
+Before connecting any sensors to your Jetson:
+- Verify correct voltage levels (3.3V vs 5V logic levels)
+- Check power consumption doesn't exceed Jetson carrier board limits
+- Ensure proper grounding to avoid electrical damage
+- Have an emergency power-off procedure ready
+:::
+
+---
+
+## Sensor Integration Architecture
+
+### Real vs. Simulated Sensors
+
+In simulation (Tier A), sensors are modeled with perfect characteristics. Real sensors have:
+
+<MermaidDiagram
+  id="sensor-comparison"
+  type="graph"
+  source={`graph LR
+    A[Simulated Sensors] --> B[Perfect Data]
+    A --> C[No Noise]
+    A --> D[Perfect Calibration]
+
+    E[Real Sensors] --> F[Noisy Data]
+    E --> G[Drift & Calibration Needs]
+    E --> H[Resource Constraints]
+
+    style A fill:#e1f5ff
+    style E fill:#ffe1e1
+    style B fill:#f0ffe1
+    style F fill:#fff4e1
+  `}
+  altText="Comparison between simulated sensors that provide perfect data with no noise and perfect calibration versus real sensors that provide noisy data with drift and calibration needs while having resource constraints."
+  caption="Key differences between simulated and real sensors in robotics applications."
+/>
+
+### Sensor Integration Pipeline
+
+<MermaidDiagram
+  id="sensor-pipeline"
+  type="flowchart"
+  source={`flowchart TD
+    A[Physical Sensor] --> B[Hardware Interface]
+    B --> C[Driver Software]
+    C --> D[ROS 2 Node]
+    D --> E[Sensor Message]
+    E --> F[ROS 2 Topic]
+    F --> G[Downstream Processing]
+
+    style A fill:#e1f5ff
+    style D fill:#fff4e1
+    style F fill:#ffe1e1
+  `}
+  altText="Sensor integration pipeline: physical sensor connects to hardware interface, then to driver software, then to ROS 2 node, which creates sensor message published to ROS 2 topic, leading to downstream processing."
+  caption="Complete sensor integration pipeline from physical hardware to ROS 2 processing."
+/>
+
+---
+
+## Common Jetson Sensors and Interfaces
+
+### Camera Sensors
+
+| Sensor Type | Interface | ROS Package | Jetson Optimization |
+|-------------|-----------|-------------|-------------------|
+| CSI Camera | MIPI CSI-2 | `nvidia_isaac_ros_gmsl` | Hardware-accelerated ISP |
+| USB Camera | USB 3.0 | `usb_cam` | Reduce resolution/frame rate |
+| Stereo Camera | USB/Ethernet | `stereo_image_proc` | Parallel processing optimization |
+
+### Range Sensors
+
+| Sensor Type | Interface | ROS Package | Jetson Optimization |
+|-------------|-----------|-------------|-------------------|
+| LiDAR (2D) | UART/SPI/Ethernet | `sllidar_ros2`, `rplidar_ros` | Multi-threaded processing |
+| LiDAR (3D) | Ethernet | `velodyne_driver`, `ouster_driver` | Point cloud downsampling |
+| Time-of-Flight | I2C | `tof_driver` | Hardware acceleration |
+
+### IMU and Navigation Sensors
+
+| Sensor Type | Interface | ROS Package | Jetson Optimization |
+|-------------|-----------|-------------|-------------------|
+| IMU | I2C/SPI | `imu_tools`, `microstrain_3dmgx` | Sensor fusion algorithms |
+| GPS | UART | `nmea_navsat_driver` | Filtering for accuracy |
+| Barometer | I2C | `ms5837_node` | Environmental compensation |
+
+---
+
+## USB Camera Integration Example
+
+### Hardware Setup
+
+For USB camera integration with Jetson:
+
+1. **Connect Camera**: Use USB 3.0 port for high-bandwidth cameras
+2. **Power Considerations**: Verify USB power consumption doesn't exceed limits
+3. **Cable Quality**: Use high-quality shielded cables for noise reduction
+
+### ROS 2 Node Implementation
+
+<CodeExample
+  language="python"
+  title="jetson_usb_camera_driver.py"
+  tier="B"
+  description="Optimized USB camera driver for Jetson hardware with resource constraints."
+>
+```python
+#!/usr/bin/env python3
+"""
+Jetson-Optimized USB Camera Driver
+
+This node integrates a USB camera with ROS 2, optimized for Jetson's
+resource constraints and featuring configurable parameters for
+different camera models and use cases.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from sensor_msgs.msg import Image, CameraInfo
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+
+class JetsonUSBCameraDriver(Node):
+    """Optimized USB camera driver for Jetson platforms."""
+
+    def __init__(self):
+        super().__init__('jetson_usb_camera_driver')
+
+        # Declare parameters with reasonable defaults for Jetson
+        self.declare_parameter('camera_id', 0)
+        self.declare_parameter('frame_width', 640)
+        self.declare_parameter('frame_height', 480)
+        self.declare_parameter('framerate', 10)  # Lower for Jetson
+        self.declare_parameter('camera_name', 'jetson_camera')
+
+        # Get parameters
+        self.camera_id = self.get_parameter('camera_id').value
+        self.frame_width = self.get_parameter('frame_width').value
+        self.frame_height = self.get_parameter('frame_height').value
+        self.framerate = self.get_parameter('framerate').value
+        self.camera_name = self.get_parameter('camera_name').value
+
+        # Create QoS profile optimized for edge computing
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,  # Minimal buffering to save memory
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        # Create publishers
+        self.image_pub = self.create_publisher(Image, f'/{self.camera_name}/image_raw', qos_profile)
+        self.info_pub = self.create_publisher(CameraInfo, f'/{self.camera_name}/camera_info', qos_profile)
+
+        # Initialize OpenCV bridge
+        self.bridge = CvBridge()
+
+        # Initialize camera
+        self.cap = cv2.VideoCapture(self.camera_id)
+        if not self.cap.isOpened():
+            self.get_logger().error(f'Could not open camera {self.camera_id}')
+            return
+
+        # Set camera properties optimized for Jetson
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+        self.cap.set(cv2.CAP_PROP_FPS, self.framerate)
+
+        # Reduce buffer to save memory
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        # Create timer based on desired framerate
+        timer_period = 1.0 / self.framerate
+        self.timer = self.create_timer(timer_period, self.capture_and_publish)
+
+        # Create camera info (simplified - in practice, load from calibration file)
+        self.camera_info = self.create_camera_info()
+
+        self.get_logger().info(f'Jetson USB Camera Driver started for {self.camera_name}')
+
+    def create_camera_info(self):
+        """Create camera info message with basic calibration parameters."""
+        info = CameraInfo()
+        info.width = self.frame_width
+        info.height = self.frame_height
+        info.k = [616.27, 0.0, 310.0, 0.0, 616.27, 235.0, 0.0, 0.0, 1.0]  # Example calibration
+        info.d = [0.0, 0.0, 0.0, 0.0, 0.0]  # No distortion for simplicity
+        info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        info.p = [616.27, 0.0, 310.0, 0.0, 0.0, 616.27, 235.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        info.distortion_model = 'plumb_bob'
+        return info
+
+    def capture_and_publish(self):
+        """Capture frame from camera and publish as ROS 2 message."""
+        ret, frame = self.cap.read()
+        if not ret:
+            self.get_logger().warn('Failed to read from camera')
+            return
+
+        try:
+            # Convert OpenCV image to ROS Image message
+            ros_image = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+            ros_image.header.stamp = self.get_clock().now().to_msg()
+            ros_image.header.frame_id = f'{self.camera_name}_optical_frame'
+
+            # Publish image and camera info
+            self.image_pub.publish(ros_image)
+            self.camera_info.header.stamp = ros_image.header.stamp
+            self.info_pub.publish(self.camera_info)
+
+            # Log frame rate for monitoring
+            self.get_logger().debug(f'Published frame: {frame.shape[1]}x{frame.shape[0]}')
+
+        except Exception as e:
+            self.get_logger().error(f'Error converting/publishing image: {e}')
+
+    def destroy_node(self):
+        """Clean up resources when node is destroyed."""
+        if self.cap.isOpened():
+            self.cap.release()
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    # Use single-threaded executor to minimize overhead on Jetson
+    node = JetsonUSBCameraDriver()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down camera driver')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+### Launching the USB Camera Node
+
+```bash
+# Build the workspace (if in a colcon workspace)
+cd ~/ros2_ws
+colcon build --packages-select jetson_camera_pkg
+source install/setup.bash
+
+# Launch with custom parameters for Jetson
+ros2 run jetson_camera_pkg jetson_usb_camera_driver \
+  --ros-args \
+  -p camera_id:=0 \
+  -p frame_width:=640 \
+  -p frame_height:=480 \
+  -p framerate:=10 \
+  -p camera_name:=jetson_camera
+
+# Monitor the camera feed
+ros2 run image_view image_view \
+  --ros-args -r image:=/jetson_camera/image_raw
+```
+
+---
+
+## LiDAR Integration Example
+
+### Hardware Setup for RPLIDAR A1
+
+1. **Connect Power**: Use 5V power supply (not USB bus power for reliability)
+2. **Connect Data**: USB connection to Jetson USB port
+3. **Verify Connection**: Check with `lsusb` to confirm device detection
+
+### ROS 2 LiDAR Node Implementation
+
+<CodeExample
+  language="python"
+  title="jetson_lidar_driver.py"
+  tier="B"
+  description="Optimized LiDAR driver for Jetson platforms with resource-efficient processing."
+>
+```python
+#!/usr/bin/env python3
+"""
+Jetson-Optimized LiDAR Driver
+
+This node interfaces with RPLIDAR devices, optimized for Jetson's
+resource constraints with efficient point cloud processing.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from sensor_msgs.msg import LaserScan
+import rplidar
+import time
+import math
+
+
+class JetsonLidarDriver(Node):
+    """Optimized LiDAR driver for Jetson platforms."""
+
+    def __init__(self):
+        super().__init__('jetson_lidar_driver')
+
+        # Declare parameters
+        self.declare_parameter('serial_port', '/dev/ttyUSB0')
+        self.declare_parameter('scan_topic', '/jetson/lidar/scan')
+        self.declare_parameter('scan_frequency', 5.0)  # Lower for Jetson
+        self.declare_parameter('range_threshold', 10.0)  # Maximum range in meters
+
+        # Get parameters
+        self.serial_port = self.get_parameter('serial_port').value
+        self.scan_topic = self.get_parameter('scan_topic').value
+        self.scan_frequency = self.get_parameter('scan_frequency').value
+        self.range_threshold = self.get_parameter('range_threshold').value
+
+        # Create QoS profile optimized for edge computing
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        # Create publisher
+        self.scan_pub = self.create_publisher(LaserScan, self.scan_topic, qos_profile)
+
+        # Initialize RPLIDAR
+        try:
+            self.lidar = rplidar.RPLidar(self.serial_port)
+            self.get_logger().info(f'Connected to RPLIDAR at {self.serial_port}')
+        except Exception as e:
+            self.get_logger().error(f'Failed to connect to RPLIDAR: {e}')
+            return
+
+        # Start scanning with reduced resolution for Jetson
+        self.lidar.start_motor()
+        self.lidar.start_scanning()
+
+        # Create timer for scanning
+        timer_period = 1.0 / self.scan_frequency
+        self.timer = self.create_timer(timer_period, self.publish_scan)
+
+        self.get_logger().info(f'Jetson LiDAR Driver started, publishing to {self.scan_topic}')
+
+    def publish_scan(self):
+        """Capture scan data and publish as LaserScan message."""
+        try:
+            # Get scan data
+            scan_data = list(self.lidar.iter_scans(max_buf_meas=500))  # Limit buffer size
+
+            if not scan_data:
+                return
+
+            # Process the latest scan
+            latest_scan = scan_data[-1]
+
+            if not latest_scan:
+                return
+
+            # Create LaserScan message
+            scan_msg = LaserScan()
+            scan_msg.header.stamp = self.get_clock().now().to_msg()
+            scan_msg.header.frame_id = 'laser_frame'
+
+            # Set scan parameters
+            scan_msg.angle_min = 0.0
+            scan_msg.angle_max = 2 * math.pi
+            scan_msg.angle_increment = (2 * math.pi) / 360  # 1 degree resolution
+            scan_msg.time_increment = 0.0  # Not using time increment
+            scan_msg.scan_time = 1.0 / self.scan_frequency
+            scan_msg.range_min = 0.15  # RPLIDAR minimum range
+            scan_msg.range_max = self.range_threshold  # Configurable maximum
+
+            # Process scan data
+            ranges = [float('inf')] * 360  # Initialize with infinity
+
+            for angle_deg, distance_mm, quality in latest_scan:
+                angle_idx = int(angle_deg)
+                if 0 <= angle_idx < 360:
+                    distance_m = distance_mm / 1000.0  # Convert mm to m
+                    if 0.15 <= distance_m <= self.range_threshold:
+                        ranges[angle_idx] = distance_m
+
+            scan_msg.ranges = ranges
+            scan_msg.intensities = [100.0] * 360  # Placeholder intensities
+
+            # Publish scan
+            self.scan_pub.publish(scan_msg)
+
+            # Log scan statistics
+            valid_ranges = [r for r in ranges if r < float('inf')]
+            self.get_logger().debug(f'Published scan with {len(valid_ranges)} valid ranges')
+
+        except Exception as e:
+            self.get_logger().error(f'Error in scan publishing: {e}')
+
+    def destroy_node(self):
+        """Clean up resources when node is destroyed."""
+        try:
+            self.lidar.stop_scanning()
+            self.lidar.stop_motor()
+            self.lidar.disconnect()
+        except:
+            pass
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = JetsonLidarDriver()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down LiDAR driver')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+---
+
+## Sensor Calibration and Validation
+
+### Camera Calibration
+
+For accurate perception, camera calibration is essential:
+
+```bash
+# Install camera calibration package
+sudo apt install ros-humble-camera-calibration
+
+# Run calibration with checkerboard pattern
+ros2 run camera_calibration cameracalibrator \
+  --size 8x6 \
+  --square 0.108 \
+  --ros-args -r image:=/jetson_camera/image_raw
+```
+
+### LiDAR Range Validation
+
+```bash
+# Validate LiDAR ranges
+ros2 run rviz2 rviz2  # Visualize /jetson/lidar/scan topic
+ros2 topic echo /jetson/lidar/scan --field ranges  # Check raw data
+```
+
+---
+
+## Multi-Sensor Integration
+
+### Sensor Fusion Node Example
+
+<CodeExample
+  language="python"
+  title="jetson_sensor_fusion.py"
+  tier="B"
+  description="Resource-efficient sensor fusion for Jetson platforms combining camera and LiDAR data."
+>
+```python
+#!/usr/bin/env python3
+"""
+Jetson-Optimized Sensor Fusion Node
+
+Combines camera and LiDAR data for enhanced environmental perception,
+optimized for Jetson's computational constraints.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from sensor_msgs.msg import Image, LaserScan
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+from collections import deque
+
+
+class JetsonSensorFusion(Node):
+    """Optimized sensor fusion for Jetson platforms."""
+
+    def __init__(self):
+        super().__init__('jetson_sensor_fusion')
+
+        # Create QoS profile optimized for edge computing
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,  # Minimal buffering
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        # Create subscribers
+        self.image_sub = self.create_subscription(
+            Image,
+            '/jetson_camera/image_raw',
+            self.image_callback,
+            qos_profile
+        )
+
+        self.lidar_sub = self.create_subscription(
+            LaserScan,
+            '/jetson/lidar/scan',
+            self.lidar_callback,
+            qos_profile
+        )
+
+        # Initialize OpenCV bridge
+        self.bridge = CvBridge()
+
+        # Buffer recent sensor data for fusion
+        self.image_buffer = deque(maxlen=2)  # Small buffer for Jetson memory
+        self.lidar_buffer = deque(maxlen=2)
+
+        # Processing timer (reduced frequency for Jetson)
+        self.processing_timer = self.create_timer(0.5, self.process_fusion)  # 2 Hz
+
+        self.get_logger().info('Jetson Sensor Fusion node started')
+
+    def image_callback(self, msg):
+        """Process incoming image message."""
+        try:
+            # Convert ROS Image to OpenCV
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # Store in buffer with timestamp
+            self.image_buffer.append({
+                'timestamp': msg.header.stamp,
+                'image': cv_image
+            })
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing image: {e}')
+
+    def lidar_callback(self, msg):
+        """Process incoming LiDAR message."""
+        try:
+            # Store LiDAR data with timestamp
+            self.lidar_buffer.append({
+                'timestamp': msg.header.stamp,
+                'ranges': msg.ranges,
+                'angle_min': msg.angle_min,
+                'angle_increment': msg.angle_increment
+            })
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing LiDAR: {e}')
+
+    def process_fusion(self):
+        """Process sensor fusion at reduced frequency for Jetson."""
+        if len(self.image_buffer) == 0 or len(self.lidar_buffer) == 0:
+            return
+
+        # Get most recent data
+        latest_image_data = self.image_buffer[-1]
+        latest_lidar_data = self.lidar_buffer[-1]
+
+        # Simple fusion: overlay LiDAR data on image (for visualization)
+        # In practice, this would involve coordinate transformation
+        fused_result = self.create_fused_visualization(
+            latest_image_data['image'],
+            latest_lidar_data['ranges'],
+            latest_lidar_data['angle_increment']
+        )
+
+        # Log fusion status (lightweight processing for Jetson)
+        valid_ranges = [r for r in latest_lidar_data['ranges'] if r < float('inf')]
+        self.get_logger().info(f'Sensor fusion: {len(valid_ranges)} valid LiDAR readings')
+
+    def create_fused_visualization(self, image, ranges, angle_increment):
+        """Create simple visualization of sensor fusion (for demonstration)."""
+        # This is a simplified example - real fusion would involve
+        # coordinate transformation and more sophisticated processing
+
+        # Draw LiDAR points on image (simplified approach)
+        height, width = image.shape[:2]
+        center_x, center_y = width // 2, height // 2
+
+        # Convert LiDAR ranges to image coordinates (very simplified)
+        for i, range_val in enumerate(ranges):
+            if range_val < float('inf') and range_val > 0:
+                angle = i * angle_increment
+                # Convert polar to Cartesian (simplified)
+                x = int(center_x + range_val * 10 * np.cos(angle))  # Scale factor for visualization
+                y = int(center_y + range_val * 10 * np.sin(angle))
+
+                if 0 <= x < width and 0 <= y < height:
+                    cv2.circle(image, (x, y), 2, (0, 255, 0), -1)  # Green dots for LiDAR points
+
+        return image
+
+    def destroy_node(self):
+        """Clean up resources."""
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = JetsonSensorFusion()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down sensor fusion node')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+---
+
+## Performance Optimization for Jetson
+
+### Memory-Efficient Processing
+
+```python
+def process_sensor_data_jetson_optimized(raw_data):
+    """
+    Memory-efficient sensor processing for Jetson constraints.
+    Uses in-place operations and avoids unnecessary copies.
+    """
+    # Process data in-place when possible
+    processed_data = np.empty_like(raw_data, dtype=np.float32)
+
+    # Efficient filtering
+    mask = raw_data > 0  # Valid data mask
+    processed_data[mask] = raw_data[mask] * 0.001  # Convert units efficiently
+
+    return processed_data
+```
+
+### Threading Considerations
+
+```python
+# For Jetson, prefer single-threaded execution to minimize overhead
+from rclpy.executors import SingleThreadedExecutor
+
+def main():
+    rclpy.init()
+    fusion_node = JetsonSensorFusion()
+
+    executor = SingleThreadedExecutor()
+    executor.add_node(fusion_node)
+
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        fusion_node.get_logger().info('Shutting down')
+    finally:
+        fusion_node.destroy_node()
+        rclpy.shutdown()
+```
+
+---
+
+## Hands-On Exercise: Multi-Sensor Integration
+
+### Objective
+
+Integrate a camera and LiDAR sensor on your Jetson platform and create a simple sensor fusion node that combines both data streams.
+
+### Requirements
+
+1. **Hardware Setup**: Jetson with connected camera and LiDAR sensors
+2. **ROS 2 Packages**: Install required sensor packages on Jetson
+3. **Calibration**: Complete basic camera calibration
+4. **Fusion Node**: Implement resource-efficient fusion algorithm
+
+### Implementation Steps
+
+<Exercise
+  id="ex-sensor-integration"
+  title="Multi-Sensor Integration on Jetson"
+  difficulty="intermediate"
+  variants={[
+    {
+      tier: "B",
+      description: "Integrate camera and LiDAR sensors on Jetson with fusion algorithm",
+      setup: "Connect both camera and LiDAR to Jetson, verify ROS 2 installation",
+      code: `#!/usr/bin/env python3
+# multi_sensor_jetson.py - Multi-sensor integration for Jetson
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from sensor_msgs.msg import Image, LaserScan
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+from collections import deque
+
+class MultiSensorJetson(Node):
+    def __init__(self):
+        super().__init__('multi_sensor_jetson')
+
+        # Optimized QoS for Jetson
+        qos = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST, depth=1, reliability=0)
+
+        # Subscribers for both sensors
+        self.image_sub = self.create_subscription(Image, '/jetson_camera/image_raw', self.image_cb, qos)
+        self.lidar_sub = self.create_subscription(LaserScan, '/jetson_lidar/scan', self.lidar_cb, qos)
+
+        # Buffer for synchronization
+        self.image_buffer = deque(maxlen=2)
+        self.lidar_buffer = deque(maxlen=2)
+
+        # Processing timer (reduced for Jetson)
+        self.timer = self.create_timer(0.5, self.process_data)  # 2 Hz
+
+        self.bridge = CvBridge()
+        self.get_logger().info('Multi-sensor node started')
+
+    def image_cb(self, msg):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            self.image_buffer.append({'stamp': msg.header.stamp, 'data': cv_image})
+        except Exception as e:
+            self.get_logger().error(f'Image error: {e}')
+
+    def lidar_cb(self, msg):
+        self.lidar_buffer.append({
+            'stamp': msg.header.stamp,
+            'ranges': msg.ranges,
+            'angle_min': msg.angle_min,
+            'angle_increment': msg.angle_increment
+        })
+
+    def process_data(self):
+        if not self.image_buffer or not self.lidar_buffer:
+            return
+
+        # Simple processing: log sensor availability
+        self.get_logger().info(f'Processing: {len(self.image_buffer)} images, {len(self.lidar_buffer)} scans')
+
+def main():
+    rclpy.init()
+    node = MultiSensorJetson()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down')
+    node.destroy_node()
+    rclpy.shutdown()
+      `,
+      acceptanceCriteria: [
+        "Both camera and LiDAR nodes publish data successfully",
+        "Multi-sensor fusion node receives data from both sensors",
+        "Node operates efficiently within Jetson resource constraints",
+        "Sensor data is properly timestamped and synchronized"
+      ],
+      solution: "Monitor with: ros2 topic echo /jetson_camera/image_raw and ros2 topic echo /jetson_lidar/scan"
+    }
+  ]}
+/>
+
+---
+
+## Troubleshooting Common Issues
+
+### USB Camera Issues
+
+**Problem**: Camera not detected or frame rate too low
+**Solutions**:
+- Check USB bandwidth: `lsusb -t` to verify connection speed
+- Reduce resolution/frame rate for Jetson constraints
+- Use powered USB hub if needed
+- Check permissions: `sudo usermod -a -G dialout $USER`
+
+### LiDAR Connection Issues
+
+**Problem**: LiDAR not responding or dropping packets
+**Solutions**:
+- Verify serial port permissions: `sudo chmod 666 /dev/ttyUSB0`
+- Check baud rate settings in driver
+- Use shorter, high-quality USB cables
+- Monitor CPU usage during high-frequency scanning
+
+### Memory Issues
+
+**Problem**: Jetson running out of memory with multiple sensors
+**Solutions**:
+- Reduce sensor resolution and frame rates
+- Use smaller buffer sizes in ROS 2 nodes
+- Implement data decimation for high-frequency sensors
+- Monitor with `jtop` and `tegrastats`
+
+---
+
+## Summary
+
+**Key Takeaways for Sensor Integration on Jetson**:
+
+- **Resource Constraints**: Optimize sensor processing for Jetson's computational and memory limits
+- **QoS Optimization**: Use BEST_EFFORT and minimal buffering for efficient sensor data handling
+- **Hardware Considerations**: Verify voltage levels, power consumption, and connection quality
+- **Calibration**: Complete sensor calibration for accurate perception
+- **Safety First**: Implement proper hardware safety measures before deployment
+
+**Next Steps**:
+After mastering sensor integration, you'll be ready for navigation systems in Module 3. The sensor fusion techniques learned here will be essential for creating robust perception systems for autonomous navigation.
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the primary optimization strategy for sensor processing on Jetson platforms?',
+      options: [
+        'Use maximum resolution and frame rate for best quality',
+        'Optimize for resource constraints with reduced resolution/frame rate',
+        'Always use multi-threaded processing for speed',
+        'Disable all QoS policies to save resources'
+      ],
+      correctAnswer: 1,
+      explanation: 'Jetson platforms have resource constraints, so sensor processing should be optimized with reduced resolution, frame rates, and efficient algorithms to operate within thermal and computational limits.',
+      hint: 'Consider the resource constraints of Jetson platforms when designing sensor processing.'
+    },
+    {
+      id: 'q2',
+      question: 'Which QoS policy is most appropriate for high-frequency sensor data on Jetson?',
+      options: [
+        'RELIABLE with KEEP_ALL history',
+        'BEST_EFFORT with minimal buffering',
+        'TRANSIENT_LOCAL with high depth',
+        'VOLATILE with maximum reliability'
+      ],
+      correctAnswer: 1,
+      explanation: 'BEST_EFFORT with minimal buffering reduces network overhead and memory usage, which is crucial for resource-constrained Jetson platforms processing high-frequency sensor data.',
+      hint: 'Think about resource optimization for edge computing.'
+    },
+    {
+      id: 'q3',
+      question: 'What should you verify before connecting sensors to your Jetson?',
+      options: [
+        'Install all ROS packages first',
+        'Check voltage levels, power consumption, and grounding',
+        'Connect to internet for driver downloads',
+        'Verify GPU availability'
+      ],
+      correctAnswer: 1,
+      explanation: 'Before connecting any hardware to your Jetson, verify correct voltage levels (3.3V vs 5V), check that power consumption doesn\'t exceed carrier board limits, and ensure proper grounding.',
+      hint: 'Review the safety admonition at the beginning of the chapter.'
+    },
+    {
+      id: 'q4',
+      question: 'Which executor type is recommended for sensor processing nodes on Jetson?',
+      options: [
+        'Multi-threaded executor for maximum performance',
+        'Single-threaded executor to minimize overhead',
+        'Custom executor for each sensor type',
+        'Global executor for all nodes'
+      ],
+      correctAnswer: 1,
+      explanation: 'Single-threaded executors are recommended for Jetson platforms to minimize overhead and resource usage, which is critical for resource-constrained edge computing.',
+      hint: 'Consider the threading section on performance optimization.'
+    },
+    {
+      id: 'q5',
+      question: 'What is an appropriate frame rate for camera processing on Jetson to balance quality and resource usage?',
+      options: [
+        '30 FPS for all applications',
+        '60 FPS for high-quality processing',
+        '5-10 FPS depending on application requirements',
+        '100 FPS for real-time applications'
+      ],
+      correctAnswer: 2,
+      explanation: '5-10 FPS is typically appropriate for Jetson platforms, balancing quality with resource constraints. Higher frame rates may exceed computational capabilities.',
+      hint: 'Look at the example camera driver for recommended frame rates.'
+    }
+  ]}
+/>
+
+---
+
+## What's Next?
+
+In **Module 3, Week 8-10**, you'll work with navigation systems using Nav2. The sensor integration skills you've learned will be essential for creating perception systems that feed into navigation algorithms.
+
+:::tip Preparation for Next Steps
+Practice integrating multiple sensors simultaneously and observe how resource usage scales with the number of active sensors.
+:::
+
+---

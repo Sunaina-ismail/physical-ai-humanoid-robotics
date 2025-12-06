@@ -1,0 +1,1708 @@
+---
+title: "Chapter 28: Capstone Project - Voice-to-Action Pipeline"
+chapter_number: "4.13"
+module: 4
+week: 13
+sidebar_position: 1
+prerequisites:
+  - "Module 1: Robotic Nervous System (ROS 2, URDF, sensors/actuators)"
+  - "Module 2: Digital Twin (Gazebo simulation, sensor modeling)"
+  - "Module 3: Robot Brain (Navigation, SLAM, sim-to-real)"
+  - "Module 4: Vision-Language-Action (Whisper, LLM planning, VLA models)"
+  - "All prior module quizzes passed (minimum 70%)"
+learning_outcomes:
+  - "Integrate multi-modal perception (speech, vision) with action planning to build an end-to-end Physical AI system"
+  - "Implement a voice-controlled navigation and manipulation pipeline combining Whisper, LLM task planning, Nav2, and robotic control"
+  - "Evaluate system performance against functional requirements, measuring success rates and identifying failure modes"
+  - "Document technical decisions, challenges, and solutions in a professional project report suitable for portfolio presentation"
+estimated_time: 720
+tier_support:
+  A: true
+  B: true
+  C: true
+tags: ["capstone", "integration", "voice-control", "vla", "navigation", "project-based"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# Chapter 28: Capstone Project - Voice-to-Action Pipeline
+
+<PrerequisiteCheck prerequisites={frontMatter.prerequisites} />
+
+:::info Capstone Project Structure
+This chapter deviates from the traditional chapter format. Instead of concepts → examples → exercises, it's structured as a **comprehensive project guide** with:
+- Project overview and motivation
+- Three-tier implementation variants (A/B/C)
+- Scaffolding code and starter templates
+- Assessment rubric and submission requirements
+- Troubleshooting resources
+:::
+
+---
+
+## Congratulations on Reaching the Capstone!
+
+You've completed 27 chapters covering:
+- **Module 1**: ROS 2 fundamentals, Python control, URDF robot modeling, sensors/actuators, safety protocols
+- **Module 2**: Gazebo simulation, digital twins, sensor modeling in simulation
+- **Module 3**: SLAM for localization, Nav2 for autonomous navigation, sim-to-real transfer strategies
+- **Module 4**: Speech-to-text with Whisper, LLM-based task planning, Vision-Language-Action (VLA) models
+
+Now it's time to **integrate everything** into a real-world Physical AI application: a voice-controlled robot that understands spoken commands, plans multi-step tasks, navigates environments, and manipulates objects.
+
+This is the kind of system powering humanoid robots like **Tesla Optimus** (voice commands for warehouse tasks), **Figure 02** (natural language interaction in logistics), and research platforms exploring embodied AI.
+
+---
+
+## Why This Matters: From Components to Systems
+
+Throughout this textbook, you've learned individual skills in isolation:
+- Publishing and subscribing to ROS 2 topics
+- Building 3D robot models in URDF
+- Running object detection on camera streams
+- Planning paths with Nav2
+- Parsing speech with Whisper
+- Generating task plans with LLMs
+
+**But real robots don't use these skills in isolation.** A Tesla Optimus robot folding laundry must:
+1. **Listen** to "fold the blue shirt on the table" (speech recognition)
+2. **Understand** the task structure: navigate → detect object → grasp → fold (language understanding)
+3. **Locate itself** in the room (SLAM/localization)
+4. **Navigate** to the table avoiding obstacles (Nav2 path planning)
+5. **See** the blue shirt among other objects (vision perception)
+6. **Manipulate** the shirt with precise motor control (arm planning + gripper control)
+7. **Recover** from failures like a dropped object (error handling)
+
+This capstone project challenges you to build this kind of **integrated system** where failures in one component cascade, timing matters, and debugging requires understanding the entire pipeline.
+
+**What makes this different from Module 1-4 exercises?**
+- **Multi-component integration**: 5+ ROS nodes working together with timing dependencies
+- **Failure modes**: Speech misrecognition, navigation failures, object detection errors—you must handle them
+- **Real-world constraints**: Latency budgets (can't wait 30 seconds for LLM response), resource limits (CPU/memory on edge devices)
+- **Open-ended problem-solving**: We provide requirements, not step-by-step instructions
+
+**Career Relevance**: This project mirrors industry robotics development:
+- Tesla's Optimus team integrates vision, planning, and control for manufacturing tasks
+- Boston Dynamics' Spot robot combines navigation, manipulation, and operator interfaces
+- Warehouse robotics companies (Amazon Robotics, Locus Robotics) build voice-controlled picking systems
+
+Your project deliverable (code + documentation + demo video) is **portfolio-ready** for robotics positions.
+
+---
+
+## Project Overview: Voice-to-Action Pipeline
+
+### System Goal
+
+Build a robot system that accepts **natural language voice commands** and executes **multi-step navigation and manipulation tasks** autonomously.
+
+**Example Interaction**:
+
+**Human**: "Go to the kitchen table, pick up the blue block, and place it on the red shelf."
+
+**Robot**:
+1. Transcribes speech → text using Whisper
+2. Parses task into steps using LLM task planner:
+   - Step 1: Navigate to "kitchen table" waypoint
+   - Step 2: Detect "blue block" using object detection
+   - Step 3: Pick up block (grasp action)
+   - Step 4: Navigate to "red shelf" waypoint
+   - Step 5: Place block (release action)
+3. Executes each step using ROS 2 action clients (Nav2 for navigation, arm controller for manipulation)
+4. Reports status: "Task completed successfully" or "Failed at Step 3: Object not detected"
+
+---
+
+## System Architecture
+
+<MermaidDiagram
+  id="diagram-28-capstone-architecture"
+  type="flow"
+  source={`
+    flowchart TB
+      subgraph Input
+        Mic[🎤 Microphone<br/>Audio Stream]
+      end
+
+      subgraph Perception
+        Whisper[🗣️ Whisper STT<br/>Speech-to-Text]
+        Vision[📷 Object Detector<br/>YOLO/OpenVLA]
+        SLAM[🗺️ SLAM/Localization<br/>AMCL]
+      end
+
+      subgraph Planning
+        LLM[🧠 LLM Task Planner<br/>GPT/Ollama]
+        Nav2[🧭 Nav2 Planner<br/>Path Planning]
+        Grasp[✋ Grasp Planner<br/>Arm Kinematics]
+      end
+
+      subgraph Action
+        Base[🚗 Mobile Base<br/>Differential Drive]
+        Arm[🦾 Arm Controller<br/>Joint Trajectory]
+        Gripper[🔧 Gripper<br/>Open/Close]
+      end
+
+      subgraph Environment
+        Gazebo[🌍 Gazebo World<br/>Simulation/Robot]
+      end
+
+      Mic --> Whisper
+      Whisper --> LLM
+      LLM --> Nav2
+      LLM --> Grasp
+      Nav2 --> Base
+      Grasp --> Arm
+      Grasp --> Gripper
+      Vision --> LLM
+      Vision --> Grasp
+      SLAM --> Nav2
+      Base --> Gazebo
+      Arm --> Gazebo
+      Gripper --> Gazebo
+      Gazebo -.Sensor Feedback.-> Vision
+      Gazebo -.Sensor Feedback.-> SLAM
+
+      style Mic fill:#e1f5ff
+      style Whisper fill:#fff4e1
+      style LLM fill:#f0ffe1
+      style Nav2 fill:#ffe1f5
+      style Gazebo fill:#ffe1e1
+  `}
+  altText="System architecture flowchart showing voice-to-action pipeline. Microphone audio flows to Whisper speech-to-text, then to LLM task planner. LLM coordinates with Nav2 path planner and Grasp planner. Object Detector and SLAM provide perception inputs. Nav2 controls Mobile Base, Grasp planner controls Arm and Gripper. All actuators interact with Gazebo simulation environment, which provides sensor feedback to perception systems."
+  caption="Figure 28.1: Complete Voice-to-Action System Architecture"
+/>
+
+---
+
+## Three-Tier Project Variants
+
+All learners must complete **Tier A** (simulation-only). Tiers B and C are optional extensions for learners with hardware access.
+
+### Tier A: Simulation-Only (MANDATORY) ✅
+
+**Hardware**: Laptop with CPU (no GPU required)
+**Simulation**: Gazebo with TurtleBot3 Waffle Pi or similar mobile manipulator
+**Speech Input**: Pre-recorded audio files (provided) or text file input (bypassing actual microphone)
+
+**Scope**:
+- Simulated robot with mobile base + 3-DOF arm + parallel gripper
+- Pre-defined Gazebo world with named waypoints ("table", "shelf", "charging_station")
+- Object detection using simulated RGB camera + color-based segmentation (simplified vision)
+- Navigation using Nav2 stack with static map
+- Voice commands processed from `.wav` files or text input (no real-time microphone required)
+
+**Key Simplifications**:
+- Color-based object detection (no neural networks required for Tier A)
+- Pre-mapped environment (no SLAM required, use static map)
+- Simplified grasp planner (top-down grasps only, no complex inverse kinematics)
+
+**Expected Deliverables**:
+- Working ROS 2 workspace with custom packages
+- Launch files to start entire system
+- Demo video showing 3+ successful task completions
+- Technical report (3-5 pages)
+
+---
+
+### Tier B: Edge AI Deployment (OPTIONAL) 🌟
+
+**Hardware**: NVIDIA Jetson Nano/Orin + real sensors (USB microphone, USB camera, IMU)
+**Additional Requirements**:
+- Real-time speech recognition using Whisper on Jetson
+- Real object detection using TensorRT-optimized YOLO
+- Real sensor integration (camera, IMU, wheel encoders)
+- Deploy on physical wheeled robot (TurtleBot3, custom differential drive)
+
+**New Challenges**:
+- Optimize Whisper for real-time performance on edge GPU (quantization, TensorRT)
+- Handle real sensor noise (camera auto-exposure, IMU drift)
+- Manage compute/power budgets (Jetson thermal throttling)
+
+**Expected Deliverables**:
+- All Tier A deliverables +
+- Performance benchmarks (inference time, CPU/GPU usage, power consumption)
+- Sim-to-real comparison report (what worked differently on real hardware?)
+
+---
+
+### Tier C: Humanoid Robot Hardware (OPTIONAL) 🚀
+
+**Hardware**: Unitree Go2/G1 or equivalent humanoid/quadruped robot
+**Additional Requirements**:
+- Full voice-to-action pipeline on real robot hardware
+- Safety interlocks (E-stop, workspace boundaries, collision detection)
+- Real-world task execution (navigate, pick, place in unstructured environment)
+
+**New Challenges**:
+- Hardware safety protocols (Dead Man Switch, collision avoidance)
+- Real-world uncertainty (humans walking through workspace, objects moved unexpectedly)
+- Whole-body coordination (balance while manipulating)
+
+**Expected Deliverables**:
+- All Tier A + B deliverables +
+- Safety protocol documentation
+- Failure mode analysis (what failure modes occurred and how did you handle them?)
+- Public demo video suitable for portfolio/LinkedIn
+
+---
+
+## Tier A: Detailed Project Guide (MANDATORY)
+
+This section provides detailed guidance for completing the Tier A (simulation-only) capstone.
+
+### Phase 1: System Design (2-3 hours)
+
+Before writing code, design your system architecture.
+
+#### Step 1.1: Define System Requirements
+
+**Functional Requirements** (what the system must do):
+1. Accept voice command as input (from .wav file or text file)
+2. Transcribe speech to text with `>85%` accuracy (using Whisper or text bypass)
+3. Parse task into navigation + manipulation steps
+4. Navigate to waypoints using Nav2 with `<5%` collision rate
+5. Detect target objects with `>80%` accuracy
+6. Execute grasp and place actions
+7. Report task success/failure to user
+
+**Non-Functional Requirements** (performance, usability):
+1. End-to-end latency: `<30` seconds from command to action start
+2. System uptime: `>90%` (nodes don't crash during normal operation)
+3. Code quality: PEP 8 compliant, docstrings for all functions
+4. Documentation: README with setup instructions, architecture diagram
+
+#### Step 1.2: Design ROS Node Architecture
+
+Your system will have **5-7 ROS nodes**. Plan them now:
+
+<MermaidDiagram
+  id="diagram-28-nodes"
+  type="graph"
+  source={`
+    graph TB
+      subgraph "Voice Processing"
+        Voice[voice_listener_node<br/>Whisper STT]
+      end
+
+      subgraph "Task Planning"
+        Planner[task_planner_node<br/>LLM Integration]
+      end
+
+      subgraph "Navigation"
+        Nav[navigation_client_node<br/>Nav2 Interface]
+      end
+
+      subgraph "Manipulation"
+        Manip[manipulation_node<br/>Arm + Gripper Control]
+      end
+
+      subgraph "Perception"
+        Detector[object_detector_node<br/>Color-based Detection]
+      end
+
+      subgraph "Orchestration"
+        Exec[task_executor_node<br/>State Machine]
+      end
+
+      Voice -->|/voice_command<br/>String| Planner
+      Planner -->|/task_plan<br/>TaskList| Exec
+      Exec -->|/nav_goal<br/>PoseStamped| Nav
+      Exec -->|/detect_object<br/>String| Detector
+      Detector -->|/detected_objects<br/>ObjectArray| Exec
+      Exec -->|/grasp_command<br/>GraspGoal| Manip
+
+      style Voice fill:#e1f5ff
+      style Planner fill:#fff4e1
+      style Exec fill:#f0ffe1
+  `}
+  altText="Node graph showing six ROS 2 nodes: voice_listener receives speech, task_planner parses commands using LLM, task_executor coordinates execution, navigation_client handles Nav2 interface, object_detector finds targets, manipulation_node controls arm and gripper. Arrows show topic-based communication between nodes."
+  caption="Figure 28.2: Proposed ROS 2 Node Architecture (you may modify this)"
+/>
+
+**Recommended Node Responsibilities**:
+
+1. **`voice_listener_node`**:
+   - Reads .wav file or text input
+   - Calls Whisper API (or uses text bypass)
+   - Publishes transcribed text to `/voice_command` (std_msgs/String)
+
+2. **`task_planner_node`**:
+   - Subscribes to `/voice_command`
+   - Sends command to LLM (OpenAI API, Ollama local, or rule-based parser)
+   - Publishes structured task plan to `/task_plan` (custom TaskList message)
+
+3. **`task_executor_node`** (State Machine):
+   - Subscribes to `/task_plan`
+   - Implements state machine: IDLE → NAVIGATE → DETECT → GRASP → PLACE → DONE
+   - Calls action servers (Nav2, arm controller)
+   - Publishes status updates
+
+4. **`navigation_client_node`**:
+   - Provides Nav2 action client interface
+   - Accepts goal poses, monitors navigation progress
+   - Reports success/failure
+
+5. **`object_detector_node`**:
+   - Subscribes to `/camera/image_raw`
+   - Detects objects by color (HSV thresholding for Tier A)
+   - Publishes bounding boxes + 3D positions to `/detected_objects`
+
+6. **`manipulation_node`**:
+   - Controls arm joint trajectory controller
+   - Controls gripper (open/close)
+   - Implements simple top-down grasp planner
+
+**Optional**: Merge some nodes if you prefer fewer processes (e.g., task_planner + task_executor in one node).
+
+#### Step 1.3: Define Custom Messages
+
+You'll need custom ROS 2 message types for task plans and object detections.
+
+**Example: `TaskStep.msg`**
+```
+# Represents one step in a multi-step task plan
+string action_type      # "navigate", "detect", "grasp", "place"
+string target_name      # "table", "blue_block", "shelf"
+float32[] parameters    # Additional parameters (grasp force, approach speed, etc.)
+```
+
+**Example: `TaskList.msg`**
+```
+# Represents a complete task plan
+TaskStep[] steps
+string original_command  # Original voice command for debugging
+```
+
+**Example: `DetectedObject.msg`**
+```
+# Represents a detected object
+string label              # "blue_block", "red_block"
+geometry_msgs/Point position  # 3D position in robot frame
+float32 confidence        # Detection confidence [0-1]
+```
+
+#### Step 1.4: Create State Machine Diagram
+
+The `task_executor_node` will use a state machine to coordinate task execution.
+
+<MermaidDiagram
+  id="diagram-28-state-machine"
+  type="stateDiagram"
+  source={`
+    stateDiagram-v2
+      [*] --> IDLE
+      IDLE --> PLANNING : Receive voice command
+      PLANNING --> NAVIGATING : Task plan ready
+      NAVIGATING --> DETECTING : Reached waypoint
+      NAVIGATING --> FAILED : Navigation failed
+      DETECTING --> GRASPING : Object detected
+      DETECTING --> FAILED : Object not found
+      GRASPING --> PLACING : Grasp successful
+      GRASPING --> FAILED : Grasp failed
+      PLACING --> SUCCESS : Place successful
+      PLACING --> FAILED : Place failed
+      SUCCESS --> IDLE : Reset
+      FAILED --> IDLE : Reset
+  `}
+  altText="State machine diagram showing task execution flow. States: IDLE (waiting), PLANNING (parsing command), NAVIGATING (moving to target), DETECTING (finding object), GRASPING (picking up), PLACING (setting down), SUCCESS (task complete), FAILED (error occurred). Transitions show progression and failure paths."
+  caption="Figure 28.3: Task Executor State Machine"
+/>
+
+**Implementation Tip**: Use a Python `enum` for states and a `match`/`case` statement (Python 3.10+) or `if-elif` chain for state transitions.
+
+---
+
+### Phase 2: Environment Setup (1-2 hours)
+
+#### Step 2.1: Create Gazebo World
+
+Create a simple world with named locations and colored objects.
+
+**File**: `worlds/capstone_world.world`
+
+**Required Elements**:
+- Ground plane with grid texture
+- 3-4 waypoint markers (colored cylinders or boxes at named locations)
+- 3-5 colored objects (red, blue, green blocks of size ~5cm cubes)
+- Static obstacles (walls, furniture models)
+- Lighting for camera simulation
+
+**Waypoint Examples**:
+- "table": position (2.0, 1.0, 0.0)
+- "shelf": position (3.5, -1.0, 0.5)
+- "charging_station": position (0.0, 0.0, 0.0)
+
+**Gazebo Tips**:
+```xml
+<!-- Example: Colored cube model -->
+<model name="blue_block">
+  <static>false</static>
+  <pose>2.1 1.0 0.5 0 0 0</pose>
+  <link name="link">
+    <collision name="collision">
+      <geometry>
+        <box><size>0.05 0.05 0.05</size></box>
+      </geometry>
+    </collision>
+    <visual name="visual">
+      <geometry>
+        <box><size>0.05 0.05 0.05</size></box>
+      </geometry>
+      <material>
+        <ambient>0 0 1 1</ambient>   <!-- Blue color -->
+        <diffuse>0 0 1 1</diffuse>
+      </material>
+    </visual>
+  </link>
+</model>
+```
+
+#### Step 2.2: Configure Robot URDF
+
+Use TurtleBot3 Waffle Pi as base, add a simple arm.
+
+**Option 1**: Use existing TurtleBot3 URDF + add arm link
+**Option 2**: Use OpenManipulator-X (open-source arm) + mobile base
+
+**Key URDF Requirements**:
+- Mobile base with differential drive plugin
+- RGB camera (for object detection)
+- 3-DOF arm with gripper (prismatic or simple parallel jaw)
+- Joint controllers for arm and gripper
+
+**Controller Configuration**: `config/robot_controllers.yaml`
+```yaml
+controller_manager:
+  ros__parameters:
+    update_rate: 50  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    gripper_controller:
+      type: position_controllers/GripperActionController
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - joint1
+      - joint2
+      - joint3
+    interface_name: position
+
+gripper_controller:
+  ros__parameters:
+    joint: gripper_joint
+```
+
+#### Step 2.3: Create Map for Nav2
+
+Use Gazebo world to generate occupancy grid map.
+
+**Steps**:
+1. Launch robot in Gazebo
+2. Launch SLAM Toolbox or Cartographer
+3. Teleop robot to explore entire world
+4. Save map: `ros2 run nav2_map_server map_saver_cli -f capstone_map`
+5. Result: `capstone_map.pgm` + `capstone_map.yaml`
+
+**Place map files in**: `maps/capstone_map.yaml`
+
+---
+
+### Phase 3: Implementation (5-8 hours)
+
+This is the core development phase. Implement each node incrementally and test in isolation before integration.
+
+#### Step 3.1: Implement Voice Listener Node (Tier A: Text Input)
+
+For Tier A, bypass actual speech recognition to avoid microphone setup. Use text file input.
+
+<CodeExample
+  language="python"
+  title="voice_listener_node.py"
+  tier="A"
+  description="Reads voice commands from text file and publishes to /voice_command topic."
+>
+```python
+#!/usr/bin/env python3
+"""
+Voice Listener Node (Tier A: Text Input)
+
+Reads voice commands from a text file and publishes them to /voice_command topic.
+For Tier B/C, replace with actual Whisper speech recognition.
+
+Published Topics:
+  /voice_command (std_msgs/String): Transcribed voice commands
+
+Parameters:
+  command_file (string): Path to text file with commands (default: "commands.txt")
+"""
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class VoiceListenerNode(Node):
+    """Simulates voice input by reading from text file."""
+
+    def __init__(self):
+        super().__init__('voice_listener')
+
+        # Declare parameters
+        self.declare_parameter('command_file', 'commands.txt')
+        self.command_file = self.get_parameter('command_file').value
+
+        # Publisher for voice commands
+        self.publisher = self.create_publisher(String, '/voice_command', 10)
+
+        # Timer to check for new commands
+        self.timer = self.create_timer(2.0, self.check_for_command)
+
+        self.get_logger().info(f'Voice Listener started. Monitoring {self.command_file}')
+        self.last_command = ""
+
+    def check_for_command(self):
+        """Read command from file and publish if changed."""
+        try:
+            with open(self.command_file, 'r') as f:
+                command = f.read().strip()
+
+            if command and command != self.last_command:
+                msg = String()
+                msg.data = command
+                self.publisher.publish(msg)
+                self.get_logger().info(f'Published command: "{command}"')
+                self.last_command = command
+
+        except FileNotFoundError:
+            self.get_logger().warn(f'Command file not found: {self.command_file}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = VoiceListenerNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+**Testing**:
+```bash
+# Terminal 1: Run node
+ros2 run capstone_pkg voice_listener_node
+
+# Terminal 2: Write command to file
+echo "Go to the table and pick up the blue block" > commands.txt
+
+# Verify publication
+ros2 topic echo /voice_command
+```
+
+#### Step 3.2: Implement Task Planner Node (LLM or Rule-Based)
+
+**Tier A Option 1**: Rule-based parser (no LLM API required)
+**Tier A Option 2**: Local LLM using Ollama
+**Tier B/C**: OpenAI API or cloud-hosted LLM
+
+<CodeExample
+  language="python"
+  title="task_planner_node.py (Rule-Based Parser)"
+  tier="A"
+  description="Parses simple voice commands into structured task plans using regex patterns."
+>
+```python
+#!/usr/bin/env python3
+"""
+Task Planner Node (Rule-Based Parser for Tier A)
+
+Parses simple voice commands into structured task plans.
+Recognizes patterns like:
+  - "Go to X" → Navigate action
+  - "Pick up X" → Navigate + Detect + Grasp sequence
+  - "Place X on Y" → Navigate + Place sequence
+
+For more complex parsing, use LLM (OpenAI, Ollama) in Tier B/C.
+"""
+
+import re
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+# Assuming you've created custom messages:
+# from capstone_interfaces.msg import TaskList, TaskStep
+
+
+class TaskPlannerNode(Node):
+    """Rule-based parser for simple voice commands."""
+
+    def __init__(self):
+        super().__init__('task_planner')
+
+        # Subscriber to voice commands
+        self.subscription = self.create_subscription(
+            String,
+            '/voice_command',
+            self.command_callback,
+            10
+        )
+
+        # Publisher for task plans
+        # For demo, publishing as String. Replace with TaskList message.
+        self.publisher = self.create_publisher(String, '/task_plan', 10)
+
+        # Define location synonyms
+        self.locations = {
+            'table': 'table',
+            'kitchen table': 'table',
+            'shelf': 'shelf',
+            'red shelf': 'shelf',
+            'charging station': 'charging_station',
+        }
+
+        # Define object synonyms
+        self.objects = {
+            'blue block': 'blue_block',
+            'red block': 'red_block',
+            'green block': 'green_block',
+        }
+
+        self.get_logger().info('Task Planner Node started (rule-based mode)')
+
+    def command_callback(self, msg):
+        """Parse voice command and publish task plan."""
+        command = msg.data.lower()
+        self.get_logger().info(f'Parsing command: "{command}"')
+
+        # Parse command into task steps
+        task_plan = self.parse_command(command)
+
+        if task_plan:
+            # For demo: publish as formatted string
+            # TODO: Replace with proper TaskList message
+            plan_msg = String()
+            plan_msg.data = task_plan
+            self.publisher.publish(plan_msg)
+            self.get_logger().info(f'Published task plan: {task_plan}')
+        else:
+            self.get_logger().error(f'Failed to parse command: "{command}"')
+
+    def parse_command(self, command):
+        """
+        Simple regex-based parser.
+
+        Patterns:
+          - "go to X" → navigate(X)
+          - "pick up X" → navigate(X location), detect(X), grasp(X)
+          - "place X on Y" → navigate(Y), place(X, Y)
+        """
+
+        # Pattern 1: "go to X"
+        match = re.search(r'go to (?:the )?(\w+(?:\s\w+)?)', command)
+        if match:
+            location = match.group(1)
+            if location in self.locations:
+                return f"navigate:{self.locations[location]}"
+
+        # Pattern 2: "pick up X"
+        match = re.search(r'pick up (?:the )?(\w+(?:\s\w+)?)', command)
+        if match:
+            object_name = match.group(1)
+            if object_name in self.objects:
+                # Assume object is at "table" for simplicity
+                return f"navigate:table;detect:{self.objects[object_name]};grasp:{self.objects[object_name]}"
+
+        # Pattern 3: "place X on Y"
+        match = re.search(r'place (?:the )?(\w+(?:\s\w+)?) on (?:the )?(\w+(?:\s\w+)?)', command)
+        if match:
+            object_name = match.group(1)
+            location = match.group(2)
+            if object_name in self.objects and location in self.locations:
+                return f"navigate:{self.locations[location]};place:{self.objects[object_name]}"
+
+        # Pattern 4: Combined "go to X, pick up Y, place on Z"
+        # (Add more patterns as needed)
+
+        return None  # Failed to parse
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = TaskPlannerNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+**Testing**:
+```bash
+# Terminal 1: Run planner
+ros2 run capstone_pkg task_planner_node
+
+# Terminal 2: Publish test command
+ros2 topic pub /voice_command std_msgs/String "data: 'go to the table'" --once
+
+# Terminal 3: Verify plan output
+ros2 topic echo /task_plan
+```
+
+#### Step 3.3: Implement Object Detector Node (Color-Based for Tier A)
+
+<CodeExample
+  language="python"
+  title="object_detector_node.py (Color-Based)"
+  tier="A"
+  description="Detects colored objects using HSV color thresholding. Uses simulated RGB camera."
+>
+```python
+#!/usr/bin/env python3
+"""
+Object Detector Node (Tier A: Color-Based Detection)
+
+Detects colored blocks (red, blue, green) using HSV color thresholding.
+For Tier B/C, replace with YOLO or OpenVLA for robust object detection.
+
+Subscribed Topics:
+  /camera/image_raw (sensor_msgs/Image): RGB camera images
+
+Published Topics:
+  /detected_objects (String): Detected object names and positions (simplified for Tier A)
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+
+class ObjectDetectorNode(Node):
+    """Color-based object detector for simulated environment."""
+
+    def __init__(self):
+        super().__init__('object_detector')
+
+        self.bridge = CvBridge()
+
+        # Subscriber to camera images
+        self.subscription = self.create_subscription(
+            Image,
+            '/camera/image_raw',
+            self.image_callback,
+            10
+        )
+
+        # Publisher for detected objects
+        self.publisher = self.create_publisher(String, '/detected_objects', 10)
+
+        # HSV color ranges for object detection
+        self.color_ranges = {
+            'blue_block': {
+                'lower': np.array([100, 150, 50]),   # H, S, V
+                'upper': np.array([130, 255, 255])
+            },
+            'red_block': {
+                'lower': np.array([0, 150, 50]),
+                'upper': np.array([10, 255, 255])
+            },
+            'green_block': {
+                'lower': np.array([40, 150, 50]),
+                'upper': np.array([80, 255, 255])
+            }
+        }
+
+        self.get_logger().info('Object Detector Node started (color-based mode)')
+
+    def image_callback(self, msg):
+        """Process camera image and detect colored objects."""
+        try:
+            # Convert ROS Image to OpenCV format
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # Convert BGR to HSV
+            hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+
+            detected_objects = []
+
+            # Detect each color
+            for object_name, color_range in self.color_ranges.items():
+                mask = cv2.inRange(hsv_image, color_range['lower'], color_range['upper'])
+
+                # Find contours
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                if contours:
+                    # Find largest contour
+                    largest_contour = max(contours, key=cv2.contourArea)
+                    area = cv2.contourArea(largest_contour)
+
+                    # Threshold for minimum object size (avoid noise)
+                    if area > 500:  # pixels
+                        # Get center of object
+                        M = cv2.moments(largest_contour)
+                        if M['m00'] > 0:
+                            cx = int(M['m10'] / M['m00'])
+                            cy = int(M['m01'] / M['m00'])
+
+                            detected_objects.append(f"{object_name} at pixel ({cx}, {cy})")
+
+            # Publish detected objects
+            if detected_objects:
+                detection_msg = String()
+                detection_msg.data = "; ".join(detected_objects)
+                self.publisher.publish(detection_msg)
+                self.get_logger().info(f'Detected: {detection_msg.data}')
+
+        except Exception as e:
+            self.get_logger().error(f'Image processing error: {e}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ObjectDetectorNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+**Dependencies**: Add to `package.xml`:
+```xml
+<depend>cv_bridge</depend>
+<depend>opencv-python</depend>
+```
+
+#### Step 3.4: Implement Task Executor (State Machine)
+
+This is the orchestrator node that coordinates all other components.
+
+<CodeExample
+  language="python"
+  title="task_executor_node.py (State Machine Skeleton)"
+  tier="A"
+  description="Coordinates task execution using state machine pattern. Calls Nav2 and manipulation nodes."
+>
+```python
+#!/usr/bin/env python3
+"""
+Task Executor Node - State Machine Orchestrator
+
+Coordinates task execution by managing state transitions and calling action servers.
+
+States:
+  - IDLE: Waiting for new task
+  - PLANNING: Processing task plan
+  - NAVIGATING: Moving to waypoint
+  - DETECTING: Looking for object
+  - GRASPING: Picking up object
+  - PLACING: Setting down object
+  - SUCCESS: Task completed
+  - FAILED: Task failed
+
+This is a skeleton - you must implement action client calls to Nav2 and arm controller.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionClient
+from std_msgs.msg import String
+from enum import Enum
+# from nav2_msgs.action import NavigateToPose  # Uncomment when Nav2 is set up
+# from control_msgs.action import GripperCommand  # Uncomment for gripper control
+
+
+class TaskState(Enum):
+    """Task execution states."""
+    IDLE = 0
+    PLANNING = 1
+    NAVIGATING = 2
+    DETECTING = 3
+    GRASPING = 4
+    PLACING = 5
+    SUCCESS = 6
+    FAILED = 7
+
+
+class TaskExecutorNode(Node):
+    """Orchestrates multi-step task execution."""
+
+    def __init__(self):
+        super().__init__('task_executor')
+
+        # Current state
+        self.state = TaskState.IDLE
+
+        # Task plan storage
+        self.current_plan = None
+        self.current_step_index = 0
+
+        # Subscribe to task plans
+        self.plan_subscription = self.create_subscription(
+            String,
+            '/task_plan',
+            self.plan_callback,
+            10
+        )
+
+        # Subscribe to detected objects
+        self.detection_subscription = self.create_subscription(
+            String,
+            '/detected_objects',
+            self.detection_callback,
+            10
+        )
+
+        # Action clients (TODO: Initialize when Nav2 and arm controller are ready)
+        # self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        # self.gripper_client = ActionClient(self, GripperCommand, 'gripper_command')
+
+        # Timer for state machine updates
+        self.timer = self.create_timer(0.5, self.state_machine_update)
+
+        # Waypoint database (hard-coded for Tier A)
+        self.waypoints = {
+            'table': {'x': 2.0, 'y': 1.0, 'theta': 0.0},
+            'shelf': {'x': 3.5, 'y': -1.0, 'theta': 1.57},
+            'charging_station': {'x': 0.0, 'y': 0.0, 'theta': 0.0}
+        }
+
+        self.detected_objects = []
+
+        self.get_logger().info('Task Executor started in IDLE state')
+
+    def plan_callback(self, msg):
+        """Receive new task plan."""
+        if self.state == TaskState.IDLE:
+            self.current_plan = msg.data.split(';')  # Parse simple plan format
+            self.current_step_index = 0
+            self.state = TaskState.PLANNING
+            self.get_logger().info(f'Received task plan: {self.current_plan}')
+        else:
+            self.get_logger().warn('Ignoring new plan - task already in progress')
+
+    def detection_callback(self, msg):
+        """Receive detected objects."""
+        self.detected_objects = msg.data.split(';')
+
+    def state_machine_update(self):
+        """Main state machine loop."""
+
+        if self.state == TaskState.IDLE:
+            # Waiting for task
+            pass
+
+        elif self.state == TaskState.PLANNING:
+            # Start executing first step
+            if self.current_plan and len(self.current_plan) > 0:
+                self.execute_current_step()
+            else:
+                self.state = TaskState.FAILED
+                self.get_logger().error('Empty task plan')
+
+        elif self.state == TaskState.NAVIGATING:
+            # Check navigation status (TODO: implement action client feedback)
+            # For now, simulate success after delay
+            self.get_logger().info('Navigating... (simulated)')
+            self.advance_to_next_step()
+
+        elif self.state == TaskState.DETECTING:
+            # Check if target object detected
+            if self.detected_objects:
+                self.get_logger().info(f'Objects detected: {self.detected_objects}')
+                self.advance_to_next_step()
+            else:
+                self.get_logger().info('Waiting for object detection...')
+
+        elif self.state == TaskState.GRASPING:
+            # Execute grasp (TODO: implement arm controller)
+            self.get_logger().info('Grasping... (simulated)')
+            self.advance_to_next_step()
+
+        elif self.state == TaskState.PLACING:
+            # Execute place (TODO: implement arm controller)
+            self.get_logger().info('Placing... (simulated)')
+            self.state = TaskState.SUCCESS
+
+        elif self.state == TaskState.SUCCESS:
+            self.get_logger().info('✅ Task completed successfully!')
+            self.state = TaskState.IDLE
+            self.current_plan = None
+
+        elif self.state == TaskState.FAILED:
+            self.get_logger().error('❌ Task failed')
+            self.state = TaskState.IDLE
+            self.current_plan = None
+
+    def execute_current_step(self):
+        """Execute the current step in the task plan."""
+        if self.current_step_index >= len(self.current_plan):
+            self.state = TaskState.SUCCESS
+            return
+
+        step = self.current_plan[self.current_step_index]
+        action, target = step.split(':') if ':' in step else (step, '')
+
+        self.get_logger().info(f'Executing step {self.current_step_index + 1}: {action} → {target}')
+
+        if action == 'navigate':
+            self.navigate_to_waypoint(target)
+        elif action == 'detect':
+            self.detect_object(target)
+        elif action == 'grasp':
+            self.grasp_object(target)
+        elif action == 'place':
+            self.place_object(target)
+        else:
+            self.get_logger().error(f'Unknown action: {action}')
+            self.state = TaskState.FAILED
+
+    def navigate_to_waypoint(self, waypoint_name):
+        """Navigate to named waypoint."""
+        if waypoint_name in self.waypoints:
+            pose = self.waypoints[waypoint_name]
+            self.get_logger().info(f'Navigating to {waypoint_name} at {pose}')
+
+            # TODO: Send goal to Nav2 action server
+            # goal = NavigateToPose.Goal()
+            # goal.pose.pose.position.x = pose['x']
+            # goal.pose.pose.position.y = pose['y']
+            # self.nav_client.send_goal_async(goal)
+
+            self.state = TaskState.NAVIGATING
+        else:
+            self.get_logger().error(f'Unknown waypoint: {waypoint_name}')
+            self.state = TaskState.FAILED
+
+    def detect_object(self, object_name):
+        """Detect target object."""
+        self.get_logger().info(f'Looking for {object_name}')
+        self.state = TaskState.DETECTING
+        # Detection happens in detection_callback
+
+    def grasp_object(self, object_name):
+        """Grasp target object."""
+        self.get_logger().info(f'Grasping {object_name}')
+        # TODO: Send arm trajectory to grasp position
+        # TODO: Close gripper
+        self.state = TaskState.GRASPING
+
+    def place_object(self, location):
+        """Place object at target location."""
+        self.get_logger().info(f'Placing object at {location}')
+        # TODO: Move arm to place position
+        # TODO: Open gripper
+        self.state = TaskState.PLACING
+
+    def advance_to_next_step(self):
+        """Move to next step in task plan."""
+        self.current_step_index += 1
+        if self.current_step_index < len(self.current_plan):
+            self.execute_current_step()
+        else:
+            self.state = TaskState.SUCCESS
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = TaskExecutorNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+**Note**: This skeleton shows the state machine pattern. You must complete the TODO sections to integrate Nav2 and arm control.
+
+---
+
+### Phase 4: Integration & Testing (2-3 hours)
+
+#### Step 4.1: Create Launch File
+
+Create a launch file to start all nodes simultaneously.
+
+**File**: `launch/capstone_system.launch.py`
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
+import os
+
+
+def generate_launch_description():
+    # Get package directories
+    gazebo_ros_share = get_package_share_directory('gazebo_ros')
+    capstone_pkg_share = get_package_share_directory('capstone_pkg')
+
+    # Gazebo world file
+    world_file = os.path.join(capstone_pkg_share, 'worlds', 'capstone_world.world')
+
+    return LaunchDescription([
+        # Launch Gazebo
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(gazebo_ros_share, 'launch', 'gazebo.launch.py')
+            ),
+            launch_arguments={'world': world_file}.items()
+        ),
+
+        # TODO: Launch robot description and controllers
+
+        # TODO: Launch Nav2 stack
+
+        # Launch capstone nodes
+        Node(
+            package='capstone_pkg',
+            executable='voice_listener_node',
+            name='voice_listener',
+            output='screen',
+            parameters=[{'command_file': 'commands.txt'}]
+        ),
+
+        Node(
+            package='capstone_pkg',
+            executable='task_planner_node',
+            name='task_planner',
+            output='screen'
+        ),
+
+        Node(
+            package='capstone_pkg',
+            executable='object_detector_node',
+            name='object_detector',
+            output='screen'
+        ),
+
+        Node(
+            package='capstone_pkg',
+            executable='task_executor_node',
+            name='task_executor',
+            output='screen'
+        ),
+    ])
+```
+
+#### Step 4.2: Integration Testing Checklist
+
+Test each integration point systematically:
+
+- [ ] **Gazebo launches** without errors
+- [ ] **Robot spawns** in correct position
+- [ ] **Camera publishes** images to `/camera/image_raw`
+- [ ] **Voice listener** publishes commands when text file updates
+- [ ] **Task planner** correctly parses commands
+- [ ] **Object detector** finds colored blocks in simulation
+- [ ] **Task executor** transitions through states correctly
+- [ ] **Nav2** navigates to waypoints without collisions
+- [ ] **Arm controller** moves to grasp positions
+- [ ] **Gripper** opens and closes on command
+- [ ] **End-to-end task** completes successfully (voice → action)
+
+#### Step 4.3: Demo Tasks
+
+Test your system with these scenarios (minimum 3 successful completions for grading):
+
+1. **Simple Navigation**: "Go to the table"
+2. **Pick Task**: "Go to the table and pick up the blue block"
+3. **Pick and Place**: "Pick up the blue block and place it on the shelf"
+4. **Multi-Step**: "Go to the table, pick up the blue block, go to the shelf, place the blue block, then go to the charging station"
+
+**Success Criteria**:
+- Robot navigates to correct waypoints (±0.2m position error acceptable)
+- Object detection identifies correct colored block
+- Grasp succeeds (block attached to gripper)
+- Place succeeds (block released at target location)
+- Task completes within 60 seconds
+
+---
+
+### Phase 5: Documentation & Submission (1-2 hours)
+
+#### Required Deliverables
+
+All Tier A learners must submit:
+
+1. **GitHub Repository** with:
+   - Complete ROS 2 workspace
+   - README.md with setup instructions
+   - Launch files and configuration
+   - Well-commented source code
+
+2. **Technical Report** (PDF, 3-5 pages):
+   - System architecture diagram
+   - Node responsibilities and communication graph
+   - Design decisions and trade-offs
+   - Test results (success rates for demo tasks)
+   - Known limitations and future improvements
+
+3. **Demo Video** (3-5 minutes):
+   - Show end-to-end task execution
+   - Include 3+ successful task completions
+   - Narrate what's happening (voice-over or captions)
+   - Show ROS terminal outputs and/or RViz visualization
+
+4. **Self-Assessment Rubric** (see rubric section below)
+
+---
+
+## Tier B Extensions (Optional)
+
+If you have Jetson Nano/Orin + real sensors:
+
+### Additional Requirements
+
+1. **Real-Time Whisper Speech Recognition**:
+   - Deploy Whisper model on Jetson
+   - Optimize with TensorRT (reduce latency to `<2` seconds)
+   - Handle real microphone input with noise
+
+2. **Real Camera Integration**:
+   - Use USB camera instead of simulated camera
+   - Handle real-world lighting variations
+   - Implement YOLO object detection (replace color-based detector)
+
+3. **Performance Benchmarking**:
+   - Measure inference times (Whisper STT, YOLO detection)
+   - Monitor CPU/GPU utilization
+   - Record power consumption
+
+4. **Sim-to-Real Analysis**:
+   - Compare detection accuracy (simulation vs. real)
+   - Compare navigation behavior
+   - Document what required tuning
+
+### Tier B Deliverables
+
+- All Tier A deliverables +
+- Performance benchmark report
+- Sim-to-real comparison analysis (1-2 pages)
+
+---
+
+## Tier C Extensions (Optional)
+
+If you have Unitree Go2/G1 or similar robot hardware:
+
+### Additional Requirements
+
+1. **Hardware Safety Protocols**:
+   - Implement Dead Man Switch (commands timeout after 100ms)
+   - Emergency stop (E-stop button or keyboard interrupt)
+   - Workspace boundary enforcement (geofencing)
+   - Collision detection and recovery
+
+2. **Real-World Task Execution**:
+   - Navigate in unstructured environment (not pre-mapped)
+   - Handle dynamic obstacles (people walking by)
+   - Recover from grasp failures
+
+3. **Whole-Body Coordination** (for humanoids):
+   - Balance while arm is extended
+   - Coordinated base + arm motion
+
+### Tier C Deliverables
+
+- All Tier A + B deliverables +
+- Safety protocol documentation (2-3 pages)
+- Failure mode analysis with recovery strategies
+- Public demo video (portfolio-quality)
+
+---
+
+## Assessment Rubric
+
+### Functionality (40 points)
+
+| Criterion | Excellent (10) | Good (7-9) | Satisfactory (5-6) | Needs Work (0-4) |
+|-----------|----------------|------------|-------------------|------------------|
+| **Voice Input** | Speech-to-text or text input works reliably (`>95%` success) | Works most of the time (80-95%) | Works sometimes (60-80%) | Doesn't work (`<60%`) |
+| **Task Planning** | Correctly parses complex multi-step commands | Parses simple 2-3 step commands | Parses only single-step commands | Parsing mostly fails |
+| **Navigation** | Reaches waypoints accurately (`<0.1m` error), avoids obstacles | Reaches waypoints (0.1-0.3m error), occasional collision | Reaches waypoints with large error (`>0.3m`) | Navigation frequently fails |
+| **Object Detection** | Detects objects reliably (`>90%` accuracy) | Detects objects (70-90% accuracy) | Detects objects (50-70% accuracy) | Detection mostly fails |
+| **Manipulation** | Grasp and place succeed consistently (`>85%`) | Succeed most of the time (65-85%) | Succeed sometimes (45-65%) | Manipulation mostly fails |
+| **Integration** | All components work together smoothly | Works with minor glitches | Frequent errors but completes tasks | System doesn't integrate |
+
+### Code Quality (20 points)
+
+| Criterion | Excellent (5) | Good (3-4) | Needs Work (0-2) |
+|-----------|---------------|------------|------------------|
+| **Code Style** | PEP 8 compliant, consistent formatting | Mostly compliant, minor issues | Many style violations |
+| **Documentation** | All functions have docstrings, clear comments | Most functions documented | Sparse or missing documentation |
+| **Modularity** | Well-organized nodes, clear responsibilities | Reasonable organization | Monolithic or poorly organized |
+| **Error Handling** | Robust error handling and logging | Basic error handling | Little to no error handling |
+
+### Documentation (20 points)
+
+| Criterion | Excellent (5) | Good (3-4) | Needs Work (0-2) |
+|-----------|---------------|------------|------------------|
+| **README** | Clear setup instructions, dependency list, usage examples | Basic instructions, some details missing | Incomplete or unclear |
+| **Architecture Diagram** | Professional diagram showing all nodes and topics | Diagram present but incomplete | Missing or very unclear |
+| **Technical Report** | Thorough analysis of design decisions and trade-offs | Basic coverage of requirements | Superficial or incomplete |
+| **Test Results** | Detailed results with success rates and analysis | Results documented but basic | Missing or very sparse |
+
+### Demo Video (20 points)
+
+| Criterion | Excellent (5) | Good (3-4) | Needs Work (0-2) |
+|-----------|---------------|------------|------------------|
+| **Task Demonstrations** | 3+ successful end-to-end tasks shown clearly | 2 tasks demonstrated | Only 1 task or no clear demos |
+| **Narration/Captions** | Clear explanation of what's happening | Basic explanation | No explanation or very unclear |
+| **Production Quality** | Good video/audio quality, well-edited | Acceptable quality | Poor quality, hard to follow |
+| **Technical Depth** | Shows ROS outputs, RViz, explains failures | Shows basic system operation | Only shows final results |
+
+**Total: 100 points**
+
+**Tier B Bonus**: +10 points for completed Tier B extensions
+**Tier C Bonus**: +20 points for completed Tier C extensions (includes Tier B)
+
+---
+
+## Starter Code Repository Structure
+
+Your ROS 2 workspace should be organized as follows:
+
+```
+capstone_ws/
+├── src/
+│   ├── capstone_pkg/
+│   │   ├── capstone_pkg/
+│   │   │   ├── __init__.py
+│   │   │   ├── voice_listener_node.py
+│   │   │   ├── task_planner_node.py
+│   │   │   ├── task_executor_node.py
+│   │   │   ├── object_detector_node.py
+│   │   │   ├── navigation_client_node.py (optional separate node)
+│   │   │   └── manipulation_node.py (optional separate node)
+│   │   ├── launch/
+│   │   │   ├── capstone_system.launch.py
+│   │   │   ├── gazebo.launch.py
+│   │   │   └── nav2.launch.py
+│   │   ├── config/
+│   │   │   ├── robot_controllers.yaml
+│   │   │   ├── nav2_params.yaml
+│   │   │   └── waypoints.yaml
+│   │   ├── worlds/
+│   │   │   └── capstone_world.world
+│   │   ├── maps/
+│   │   │   ├── capstone_map.pgm
+│   │   │   └── capstone_map.yaml
+│   │   ├── urdf/
+│   │   │   └── robot.urdf.xacro
+│   │   ├── package.xml
+│   │   └── setup.py
+│   └── capstone_interfaces/  (custom messages)
+│       ├── msg/
+│       │   ├── TaskStep.msg
+│       │   ├── TaskList.msg
+│       │   └── DetectedObject.msg
+│       ├── CMakeLists.txt
+│       └── package.xml
+├── commands.txt  (voice command input for Tier A)
+└── README.md
+```
+
+---
+
+## Troubleshooting Guide
+
+### Common Issues and Solutions
+
+#### Issue 1: Gazebo won't launch
+
+**Symptoms**: Error like `[gazebo-1] process has died`
+
+**Solutions**:
+- Check world file syntax: `gz sdf -k worlds/capstone_world.world`
+- Verify Gazebo installation: `gazebo --version`
+- Check for missing plugins in URDF
+
+#### Issue 2: Nav2 navigation fails
+
+**Symptoms**: Robot spins in place or doesn't move
+
+**Solutions**:
+- Verify map is loaded: `ros2 topic echo /map` (should show occupancy grid)
+- Check robot localization: `ros2 topic echo /amcl_pose`
+- Inspect costmaps in RViz: Add `/local_costmap/costmap` and `/global_costmap/costmap`
+- Verify TF tree: `ros2 run tf2_tools view_frames`
+
+#### Issue 3: Object detection doesn't find objects
+
+**Symptoms**: `/detected_objects` topic is empty
+
+**Solutions**:
+- Verify camera is publishing: `ros2 topic hz /camera/image_raw`
+- Check camera image in RViz: Add `Image` display subscribed to `/camera/image_raw`
+- Tune HSV color ranges (use `cv2.imshow()` to debug HSV mask)
+- Ensure objects are in camera field of view
+
+#### Issue 4: Task executor stuck in state
+
+**Symptoms**: State machine doesn't advance
+
+**Solutions**:
+- Add debug logging to state machine callback
+- Check if action servers are running: `ros2 action list`
+- Verify topic connections: `rqt_graph`
+- Use `ros2 topic echo` to verify messages are being published
+
+#### Issue 5: Arm controller doesn't move
+
+**Symptoms**: Gripper or arm joints don't respond
+
+**Solutions**:
+- Check controller status: `ros2 control list_controllers`
+- Verify joint state publisher: `ros2 topic echo /joint_states`
+- Inspect URDF transmission tags (required for Gazebo control)
+- Check controller configuration in `robot_controllers.yaml`
+
+---
+
+## Getting Help
+
+If you're stuck after trying troubleshooting steps:
+
+1. **Review Prior Chapters**:
+   - Chapter 2-5: ROS 2 nodes, topics, services, actions
+   - Chapter 10-12: Nav2 navigation and path planning
+   - Chapter 25-27: VLA models and LLM integration
+
+2. **ROS 2 Documentation**:
+   - [Nav2 Tutorials](https://navigation.ros.org/tutorials/index.html)
+   - [ROS 2 Actions](https://docs.ros.org/en/humble/Tutorials/Intermediate/Writing-an-Action-Server-Client/Py.html)
+   - [Gazebo ROS Integration](https://gazebosim.org/docs/latest/ros2_integration/)
+
+3. **Community Forums**:
+   - [ROS Discourse](https://discourse.ros.org/)
+   - [ROS Answers](https://answers.ros.org/)
+   - Stack Overflow (tag: `ros2`)
+
+4. **Office Hours** (if applicable):
+   - Check course forum for instructor availability
+
+---
+
+## Submission Instructions
+
+### Deadline
+
+**Week 13, Day 7** (end of the week)
+
+### Submission Package
+
+Create a single ZIP file containing:
+
+1. **Code**: Entire ROS 2 workspace (`capstone_ws/`)
+2. **Report**: `capstone_report.pdf` (3-5 pages)
+3. **Video**: `demo_video.mp4` or YouTube link (3-5 minutes)
+4. **Self-Assessment**: `self_assessment.pdf` (completed rubric with justifications)
+
+### Submission Platform
+
+Upload to course platform (Canvas, Moodle, etc.) or submit GitHub repository URL.
+
+**GitHub Submission Requirements**:
+- Public repository or add instructor as collaborator
+- README.md with setup instructions
+- Release tag: `v1.0-capstone-submission`
+- Video uploaded to YouTube (unlisted) and link in README
+
+### Grading Timeline
+
+- Submissions reviewed within 2 weeks
+- Peer review period: 1 week (optional, for feedback exchange)
+- Final grades posted: 3 weeks after submission
+
+---
+
+## Inspirational Closing
+
+You've built foundational skills across 27 chapters:
+- Programmed ROS 2 nodes in Python
+- Modeled robots in URDF
+- Simulated physics in Gazebo
+- Implemented navigation with Nav2
+- Integrated vision, language, and action
+
+Now you're **integrating these skills** into a complete system—the kind of system powering the next generation of humanoid robots transforming industries.
+
+**This capstone is challenging by design.** Real robotics projects are messy:
+- Components fail in unexpected ways
+- Debugging requires understanding the entire stack
+- Success comes from iteration and problem-solving
+
+**You will encounter bugs.** You will spend hours debugging why Nav2 isn't publishing goals or why the arm won't move. **This is normal.** Every robotics engineer has been there.
+
+**But when it works—when you speak "go to the table" and watch your simulated robot navigate, detect a block, grasp it, and place it on a shelf—you'll have built something genuinely impressive.**
+
+This project is **portfolio-ready**. Share it on LinkedIn, GitHub, and job applications. It demonstrates:
+- System integration skills
+- ROS 2 proficiency
+- Autonomous navigation understanding
+- Perception-action loop implementation
+- Project management and documentation
+
+**You've got this.** Use the scaffolding, reach out for help, iterate relentlessly.
+
+Welcome to Physical AI engineering. 🚀
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the primary advantage of using a modular architecture (separate perception, planning, and control nodes) in the voice-to-action pipeline?',
+      options: [
+        'It makes the code run faster by distributing work',
+        'It allows independent testing, debugging, and replacement of components without breaking the entire system',
+        'It reduces the number of ROS 2 topics needed',
+        'It eliminates the need for error handling'
+      ],
+      correctAnswer: 1,
+      explanation: 'Modular architecture enables fault isolation, independent component testing, and the ability to swap implementations (e.g., replace Whisper with a different STT model) without rewriting the entire pipeline. This is a core principle of professional robotics engineering.',
+      hint: 'Think about what happens when one component fails or needs upgrading in a monolithic vs. modular system.'
+    },
+    {
+      id: 'q2',
+      question: 'Why is the Sim-to-Real workflow essential for developing the capstone project?',
+      options: [
+        'Simulation is easier to set up than real hardware',
+        'It allows safe, fast iteration and testing before deploying to expensive/dangerous physical robots',
+        'Gazebo produces more accurate results than real sensors',
+        'Physical robots cannot run ROS 2 code'
+      ],
+      correctAnswer: 1,
+      explanation: 'Sim-to-Real workflow allows you to catch integration bugs, test edge cases, and validate system behavior in a safe, repeatable environment before risking hardware damage or safety issues on a physical robot. This is industry standard practice.',
+      hint: 'Consider the risks and costs of testing voice navigation on a real humanoid robot without prior validation.'
+    },
+    {
+      id: 'q3',
+      question: 'In the voice-to-action pipeline, what should happen when the speech recognition module (Whisper) detects low confidence in the transcription?',
+      options: [
+        'Proceed with the low-confidence command anyway',
+        'Request clarification from the user before executing any action',
+        'Randomly choose a plausible command',
+        'Shut down the entire system'
+      ],
+      correctAnswer: 1,
+      explanation: 'Safety-critical systems must handle uncertainty gracefully. When confidence is low, the system should ask for clarification rather than executing potentially incorrect commands. This prevents dangerous misinterpretations like "go left" being heard as "go right".',
+      hint: 'What would happen if a surgical robot executed a command it wasn\'t certain about?'
+    },
+    {
+      id: 'q4',
+      question: 'Which Quality of Service (QoS) reliability setting is most appropriate for the command topic that carries navigation goals from the LLM planner to Nav2?',
+      options: [
+        'BEST_EFFORT - Commands can be dropped without issue',
+        'RELIABLE - Commands must be delivered to ensure the robot navigates to the correct goal',
+      ],
+      correctAnswer: 1,
+      explanation: 'Navigation commands are mission-critical and must be delivered reliably. If a "go to kitchen" command is dropped, the robot may not move at all or execute a stale command. Use RELIABLE QoS for commands and BEST_EFFORT for high-frequency sensor data.',
+      hint: 'Review Chapter 2\'s section on QoS policies—what did we recommend for motor commands vs. camera images?'
+    },
+    {
+      id: 'q5',
+      question: 'True or False: The capstone project demonstrates a complete Physical AI system because it combines perception (vision, speech), cognition (LLM planning), and action (navigation, manipulation).',
+      options: [
+        'True - All three components are integrated',
+        'False - It only covers perception and action',
+      ],
+      correctAnswer: 0,
+      explanation: 'True. The voice-to-action pipeline integrates all three pillars of Physical AI: perception (Whisper for speech, cameras for vision), cognition (LLM for task planning and decision-making), and action (Nav2 for navigation, arm control for manipulation). This end-to-end integration is what distinguishes Physical AI from isolated AI modules.',
+      hint: 'Trace the data flow: voice input → perception → LLM planning → navigation commands → motor control.'
+    },
+    {
+      id: 'q6',
+      question: 'What is the purpose of state machine logic (e.g., IDLE, LISTENING, PLANNING, EXECUTING, COMPLETED) in the integration node?',
+      options: [
+        'To make the code more complex and professional-looking',
+        'To coordinate asynchronous components, prevent race conditions, and enforce valid state transitions',
+        'To display different colors on a status LED',
+        'To comply with ROS 2 naming conventions'
+      ],
+      correctAnswer: 1,
+      explanation: 'State machines prevent invalid transitions (e.g., executing a plan before listening to speech), ensure only one operation happens at a time, and make the system behavior deterministic and debuggable. This is essential for safety-critical robotics.',
+      hint: 'What happens if the robot starts planning before speech recognition finishes? State machines prevent this.'
+    }
+  ]}
+/>
+
+---
+
+## Further Reading
+
+### End-to-End Robot Systems
+- [Tesla AI Day 2022: Optimus Development](https://www.youtube.com/watch?v=ODSJsviD_SU) - Full-stack robot system design
+- [Figure AI: ChatGPT in Humanoid Robots](https://www.figure.ai/) - Voice-controlled manipulation
+- [Boston Dynamics: Spot SDK](https://dev.bostondynamics.com/) - Commercial robot system architecture
+
+### System Integration Patterns
+- [ROS 2 Design: Composition](https://design.ros2.org/articles/composition.html) - Best practices for node composition
+- [Nav2 Architecture](https://navigation.ros.org/concepts/index.html) - How Nav2 integrates components
+- [MoveIt 2 Tutorials](https://moveit.picknik.ai/humble/index.html) - Arm manipulation integration
+
+### State Machine Implementations
+- [FlexBE](https://flexbe.github.io/) - Behavior tree framework for ROS 2
+- [SMACH](https://wiki.ros.org/smach) - State machine library (ROS 1, concepts apply)
+- [BehaviorTree.CPP](https://www.behaviortree.dev/) - Behavior trees for decision-making
+
+### Debugging Tools
+- [ROS 2 Introspection Tools](https://docs.ros.org/en/humble/Concepts/About-ROS-2-Client-Libraries.html#introspection-tools)
+- [rqt User Guide](https://docs.ros.org/en/humble/Concepts/About-RQt.html) - Visualization and debugging
+- [ROS 2 Launch Debugging](https://docs.ros.org/en/humble/Tutorials/Intermediate/Launch/Launch-Main.html)
+
+---
+
+**License**: This chapter is licensed under [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/).
+
+**Contributors**: Physical AI & Humanoid Robotics Textbook Project
+
+---
+
+**Congratulations on completing the 13-week Physical AI & Humanoid Robotics curriculum!**
+
+You've progressed from ROS 2 basics to building a voice-controlled autonomous robot system. This journey—from "Hello World" publishers to integrated VLA pipelines—mirrors the learning path of professional robotics engineers.
+
+**What's next?**
+- Contribute to open-source robotics projects (Nav2, MoveIt, Gazebo)
+- Build advanced projects (multi-robot coordination, outdoor navigation, human-robot interaction)
+- Explore robotics research (join labs, read papers, attend conferences like ICRA, IROS)
+- Apply for robotics positions (your capstone is your portfolio piece!)
+
+**Stay curious. Keep building. The field of Physical AI is just beginning.**
+
+---
+
+**Ready to submit?** Review the rubric, test your system one more time, and package your deliverables. Good luck! 🎓🤖

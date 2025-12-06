@@ -1,0 +1,74 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.tutorialSidebar.category.Module 1: Foundations": {
+    "message": "Module 1: Foundations",
+    "description": "The label for category 'Module 1: Foundations' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 1: Physical AI & ROS 2 Basics": {
+    "message": "Week 1: Physical AI & ROS 2 Basics",
+    "description": "The label for category 'Week 1: Physical AI & ROS 2 Basics' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 2: Python Patterns & DSP for Robotics": {
+    "message": "Week 2: Python Patterns & DSP for Robotics",
+    "description": "The label for category 'Week 2: Python Patterns & DSP for Robotics' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 3: ROS 2 Services & Actions": {
+    "message": "Week 3: ROS 2 Services & Actions",
+    "description": "The label for category 'Week 3: ROS 2 Services & Actions' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 4: TF2 Transforms & URDF Models": {
+    "message": "Week 4: TF2 Transforms & URDF Models",
+    "description": "The label for category 'Week 4: TF2 Transforms & URDF Models' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 5: Testing & CI/CD": {
+    "message": "Week 5: Testing & CI/CD",
+    "description": "The label for category 'Week 5: Testing & CI/CD' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Module 2: Simulation": {
+    "message": "Module 2: Simulation",
+    "description": "The label for category 'Module 2: Simulation' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 6: Digital Twins & Gazebo": {
+    "message": "Week 6: Digital Twins & Gazebo",
+    "description": "The label for category 'Week 6: Digital Twins & Gazebo' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 7: Isaac Sim & Domain Randomization": {
+    "message": "Week 7: Isaac Sim & Domain Randomization",
+    "description": "The label for category 'Week 7: Isaac Sim & Domain Randomization' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Module 3: Navigation": {
+    "message": "Module 3: Navigation",
+    "description": "The label for category 'Module 3: Navigation' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 8: Isaac Sim Concepts & VSLAM": {
+    "message": "Week 8: Isaac Sim Concepts & VSLAM",
+    "description": "The label for category 'Week 8: Isaac Sim Concepts & VSLAM' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 9: SLAM Algorithms & Mapping": {
+    "message": "Week 9: SLAM Algorithms & Mapping",
+    "description": "The label for category 'Week 9: SLAM Algorithms & Mapping' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 10: Visual SLAM & Voice Navigation": {
+    "message": "Week 10: Visual SLAM & Voice Navigation",
+    "description": "The label for category 'Week 10: Visual SLAM & Voice Navigation' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Module 4: Vision-Language-Action": {
+    "message": "Module 4: Vision-Language-Action",
+    "description": "The label for category 'Module 4: Vision-Language-Action' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 11: VLA Architecture & Transformers": {
+    "message": "Week 11: VLA Architecture & Transformers",
+    "description": "The label for category 'Week 11: VLA Architecture & Transformers' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 12: Fine-Tuning VLA Models": {
+    "message": "Week 12: Fine-Tuning VLA Models",
+    "description": "The label for category 'Week 12: Fine-Tuning VLA Models' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.Week 13: Voice Control & Capstone Project": {
+    "message": "Week 13: Voice Control & Capstone Project",
+    "description": "The label for category 'Week 13: Voice Control & Capstone Project' in sidebar 'tutorialSidebar'"
+  }
+}

@@ -1,0 +1,1075 @@
+---
+title: "Tier B Extension: Nav2 with LiDAR on Edge Platforms"
+chapter_number: "3.2B"
+module: 3
+sidebar_position: 2
+description: "Deploy Navigation2 stack with LiDAR sensors on NVIDIA Jetson for edge AI navigation."
+prerequisites:
+  - "Module 1 content on ROS 2 fundamentals"
+  - "Module 2 content on sensor integration"
+  - "Basic understanding of navigation concepts"
+  - "Jetson setup and deployment experience"
+learning_outcomes:
+  - "Configure Navigation2 stack for Jetson hardware constraints"
+  - "Integrate LiDAR sensors with Nav2 for 2D navigation"
+  - "Optimize navigation parameters for edge computing performance"
+  - "Deploy complete navigation pipeline on resource-limited hardware"
+estimated_time: 150
+tier_support:
+  A: true
+  B: true
+  C: false
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import TierBadge from '@site/src/components/TierBadge';
+
+# Tier B Extension: Nav2 with LiDAR on Edge Platforms
+
+<TierBadge tiers={["B"]} />
+
+## Why This Matters
+
+Navigation2 (Nav2) is the standard navigation stack for ROS 2, providing complete autonomous navigation capabilities including localization, path planning, and obstacle avoidance. Deploying Nav2 on edge platforms like NVIDIA Jetson enables autonomous robots to operate in real-world environments with resource constraints. Understanding how to optimize Nav2 for edge computing is essential for robotics engineers working on deployable systems.
+
+**Real-World Applications**:
+- **Warehouse Robots**: Autonomous inventory management and material transport
+- **Service Robots**: Indoor navigation for delivery, cleaning, and assistance
+- **Agricultural Robots**: Autonomous navigation between crop rows
+- **Search and Rescue**: GPS-denied navigation in disaster zones
+
+:::danger Hardware Safety
+Before deploying navigation systems on Jetson hardware:
+- Ensure emergency stop mechanisms are in place and accessible
+- Verify robot's maximum speed and acceleration parameters are safe
+- Test navigation algorithms in controlled environments before deployment
+- Implement Dead Man Switch patterns with 100ms timeout for motor control
+:::
+
+---
+
+## Nav2 Architecture for Edge Platforms
+
+### Navigation Stack Overview
+
+<MermaidDiagram
+  id="nav2-architecture"
+  type="graph"
+  source={`graph TB
+    A[Sensor Data] --> B[Localization]
+    A --> C[Mapping]
+    B --> D[Path Planning]
+    C --> D
+    D --> E[Controller]
+    E --> F[Robot Motion]
+
+    B --> G[AMCL] & H[Map Server]
+    D --> I[Global Planner] & J[Local Planner]
+    E --> K[Velocity Smoother] & L[Robot Controller]
+
+    style A fill:#e1f5ff
+    style F fill:#f0ffe1
+    style G fill:#fff4e1
+    style I fill:#fff4e1
+    style K fill:#fff4e1
+  `}
+  altText="Navigation2 architecture showing sensor data flowing to localization and mapping components, which feed into path planning, then to controller, and finally to robot motion. Localization includes AMCL and Map Server, path planning includes Global and Local Planners, and controller includes Velocity Smoother and Robot Controller."
+  caption="Navigation2 architecture with components optimized for edge computing deployment."
+/>
+
+### Edge Computing Constraints Impact
+
+Deploying Nav2 on Jetson platforms introduces specific constraints that require optimization:
+
+<MermaidDiagram
+  id="edge-constraints"
+  type="flowchart"
+  source={`flowchart TD
+    A[Resource Constraints] --> B[CPU: Limited processing power]
+    A --> C[Memory: Constrained RAM for maps]
+    A --> D[Power: Thermal and power budget]
+    A --> E[Real-time: Timing requirements]
+
+    B --> F[Reduce costmap resolution]
+    C --> G[Use compressed maps]
+    D --> H[Optimize algorithm efficiency]
+    E --> I[Adjust update frequencies]
+
+    style A fill:#e1f5ff
+    style F fill:#fff4e1
+    style G fill:#fff4e1
+    style H fill:#fff4e1
+    style I fill:#fff4e1
+  `}
+  altText="Edge computing constraints on Jetson platforms: CPU limitations requiring reduced costmap resolution, memory constraints requiring compressed maps, power constraints requiring optimized algorithm efficiency, and real-time requirements requiring adjusted update frequencies."
+  caption="How edge computing constraints impact Nav2 configuration and optimization."
+/>
+
+---
+
+## Jetson Nav2 Installation and Setup
+
+### Prerequisites Installation
+
+```bash
+# Update system packages
+sudo apt update && sudo apt upgrade -y
+
+# Install Nav2 packages optimized for Jetson
+sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
+sudo apt install ros-humble-slam-toolbox ros-humble-robot-localization
+
+# Install visualization tools (optional on Jetson)
+sudo apt install ros-humble-rviz2
+
+# Install additional dependencies for navigation
+sudo apt install ros-humble-dwb-core ros-humble-voxel-grid
+sudo apt install ros-humble-teb-local-planner  # More efficient than default
+```
+
+### Memory Optimization for Jetson
+
+```bash
+# Configure system for better memory management on Jetson
+# Add to /etc/systemd/system/jetson-nav2.service for persistent optimization
+
+# Create swap space if needed (be careful with eMMC wear)
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# Verify available memory
+free -h
+```
+
+---
+
+## Nav2 Configuration for Edge Platforms
+
+### Optimized Costmap Parameters
+
+For Jetson deployment, costmaps need to be optimized for memory and CPU constraints:
+
+```yaml
+# config/nav2_jetson_costmap_params.yaml
+amcl:
+  ros__parameters:
+    use_sim_time: false
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_footprint"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    max_beams: 60      # Reduced for Jetson performance
+    max_particles: 50  # Reduced for Jetson memory
+    min_particles: 10  # Reduced for Jetson memory
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.5
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.25
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: /jetson/lidar/scan
+
+amcl_map_client:
+  ros__parameters:
+    use_sim_time: false
+
+amcl_rclcpp_node:
+  ros__parameters:
+    use_sim_time: false
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    bt_loop_duration: 10      # Increased for Jetson performance
+    default_server_timeout: 20
+    # Specify the path where the BT XML files are located
+    plugin_lib_names:
+    - nav2_compute_path_to_pose_action_bt_node
+    - nav2_follow_path_action_bt_node
+    - nav2_back_up_action_bt_node
+    - nav2_spin_action_bt_node
+    - nav2_wait_action_bt_node
+    - nav2_clear_costmap_service_bt_node
+    - nav2_is_stuck_condition_bt_node
+    - nav2_goal_reached_condition_bt_node
+    - nav2_goal_updated_condition_bt_node
+    - nav2_initial_pose_received_condition_bt_node
+    - nav2_reinitialize_global_localization_service_bt_node
+    - nav2_rate_controller_bt_node
+    - nav2_distance_controller_bt_node
+    - nav2_speed_controller_bt_node
+    - nav2_truncate_path_action_bt_node
+    - nav2_goal_updater_node_bt_node
+    - nav2_recovery_node_bt_node
+    - nav2_pipeline_sequence_bt_node
+    - nav2_round_robin_node_bt_node
+    - nav2_transform_available_condition_bt_node
+    - nav2_time_expired_condition_bt_node
+    - nav2_path_expiring_timer_condition
+    - nav2_distance_traveled_condition_bt_node
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_frequency: 5.0    # Reduced for Jetson
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugin: "goal_checker"
+    controller_plugins: ["FollowPath"]
+
+    # DWB controller
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: True
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      max_vel_x: 0.5        # Reduced for safety and Jetson
+      max_vel_y: 0.0
+      max_vel_theta: 1.0
+      min_speed_xy: 0.0
+      max_speed_xy: 0.5
+      min_speed_theta: 0.0
+      acc_lim_x: 2.5
+      acc_lim_y: 0.0
+      acc_lim_theta: 3.2
+      decel_lim_x: -2.5
+      decel_lim_y: 0.0
+      decel_lim_theta: -3.2
+      vx_samples: 10        # Reduced for Jetson performance
+      vy_samples: 5
+      vtheta_samples: 20
+      sim_time: 1.7
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.15
+      stateful: True
+      restore_defaults: False
+      publish_cost_grid_pc: False  # Disabled for Jetson performance
+      use_dwa: False
+      max_iterations: 10
+      selection_algorithm: "default"
+      use_local_costmap: True
+      allow_unknown: true
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0    # Reduced for Jetson
+      publish_frequency: 2.0   # Reduced for Jetson
+      global_frame: odom
+      robot_base_frame: base_link
+      use_sim_time: false
+      rolling_window: true
+      width: 5               # Reduced for Jetson memory
+      height: 5              # Reduced for Jetson memory
+      resolution: 0.05       # Adjusted for Jetson balance
+      robot_radius: 0.22
+      plugins: ["voxel_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: False  # Disabled for Jetson performance
+        origin_z: 0.0
+        z_resolution: 0.2
+        z_voxels: 2
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+        scan:
+          topic: /jetson/lidar/scan
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0    # Reduced for Jetson
+      publish_frequency: 0.5   # Reduced for Jetson
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: false
+      robot_radius: 0.22
+      resolution: 0.05         # Adjusted for Jetson balance
+      track_unknown_space: true
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /jetson/lidar/scan
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+
+planner_server:
+  ros__parameters:
+    use_sim_time: false
+    planner_frequency: 1.0    # Reduced for Jetson
+    expected_planner_frequency: 1.0
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner::NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: false
+    smoother_frequency: 20.0
+    max_angular_velocity: 1.0
+    max_linear_velocity: 0.5
+    velocity_scaling_method: "speed_lim"
+    scaling_speed: 0.25
+    max_scaling_factor: 0.2
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: false
+    local_frame: odom
+    global_frame: map
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    recovery_plugins: ["spin", "backup", "wait"]
+    recovery_plugin_types: ["nav2_recoveries::Spin", "nav2_recoveries::BackUp", "nav2_recoveries::Wait"]
+    spin:
+      plugin: "nav2_recoveries::Spin"
+      sim_frequency: 5
+      angle_increment: 0.1
+      tolerace: 0.1
+      min_duration: 1.0
+      max_duration: 10.0
+    backup:
+      plugin: "nav2_recoveries::BackUp"
+      sim_frequency: 5
+      distance: 0.15
+      min_duration: 1.0
+      max_duration: 10.0
+    wait:
+      plugin: "nav2_recoveries::Wait"
+      sim_frequency: 5
+      duration: 2.0
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: false
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: true
+      wait_time: 1s
+
+---
+## Launching Nav2 on Jetson
+
+### Basic Launch Command
+
+```bash
+# Source ROS 2 environment
+source /opt/ros/humble/setup.bash
+source ~/nav2_ws/install/setup.bash  # If using custom workspace
+
+# Launch Nav2 with optimized parameters for Jetson
+ros2 launch nav2_bringup navigation_launch.py \
+  use_sim_time:=false \
+  params_file:=~/config/nav2_jetson_costmap_params.yaml \
+  autostart:=true
+```
+
+### Mapping and Localization
+
+For SLAM (mapping) on Jetson, use optimized parameters:
+
+```bash
+# Launch SLAM toolbox with Jetson optimizations
+ros2 launch slam_toolbox online_async_launch.py \
+  use_sim_time:=false \
+  params_file:=~/config/slam_toolbox_jetson.yaml
+```
+
+Example SLAM configuration for Jetson:
+```yaml
+# config/slam_toolbox_jetson.yaml
+slam_toolbox:
+  ros__parameters:
+    # Plugin configuration
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    ceres_dogleg_type: TRADITIONAL_DOGLEG
+    ceres_loss_function: None
+
+    # Optimizer parameters
+    use_motion_compensation: true
+    initial_pose: [0.0, 0.0, 0.0]
+
+    # Map parameters
+    map_file_name: /home/jetson/maps/jetson_map
+    map_start_at_zero: false
+    map_update_interval: 5.0    # Reduced for Jetson
+    resolution: 0.05           # Adjusted for balance
+    max_laser_range: 10.0      # Limited for performance
+    minimum_time_interval: 0.5 # Reduced update frequency
+    transform_timeout: 0.2
+    tf_buffer_duration: 30.0
+    stack_size_to_use: 40000000 # 40MB for Jetson
+
+    # Scan processing
+    scan_buffer_size: 10       # Reduced for memory
+    scan_buffer_maximum_scan_distance: 10.0
+    link_match_minimum_response_fine: 0.1
+    loop_match_minimum_response_fine: 0.1
+```
+
+---
+
+## Performance Optimization Techniques
+
+### Memory Management
+
+```python
+# Example: Memory-efficient costmap updates for Jetson
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import LaserScan
+
+class JetsonOptimizedCostmap(Node):
+    """Memory-efficient costmap implementation for Jetson."""
+
+    def __init__(self):
+        super().__init__('jetson_costmap')
+
+        # Use smaller data types to save memory
+        self.costmap = np.zeros((200, 200), dtype=np.int8)  # Smaller grid, smaller data type
+
+        # Subscribe to laser scan with optimized QoS
+        self.scan_sub = self.create_subscription(
+            LaserScan,
+            '/jetson/lidar/scan',
+            self.scan_callback,
+            1  # Minimal buffer size
+        )
+
+        # Publish at reduced frequency
+        self.update_timer = self.create_timer(0.5, self.update_costmap)  # 2 Hz instead of 10 Hz
+
+    def scan_callback(self, msg):
+        """Process laser scan with memory efficiency."""
+        # Process scan data efficiently without creating large temporary arrays
+        valid_ranges = [r for r in msg.ranges if 0.1 < r < 5.0]  # Filter valid ranges
+
+        if len(valid_ranges) > 0:
+            # Update costmap efficiently
+            self.update_from_scan(msg)
+
+    def update_from_scan(self, scan_msg):
+        """Update costmap from laser scan with Jetson optimizations."""
+        # Efficient implementation avoiding large memory allocations
+        for i, range_val in enumerate(scan_msg.ranges):
+            if 0.1 < range_val < 5.0:  # Valid range
+                angle = scan_msg.angle_min + i * scan_msg.angle_increment
+                # Convert to costmap coordinates (simplified)
+                # In practice, implement proper coordinate transformation
+                pass
+
+def main():
+    rclpy.init()
+    node = JetsonOptimizedCostmap()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
+```
+
+### CPU Load Balancing
+
+```bash
+# Monitor CPU usage during Nav2 operation
+sudo tegrastats  # Real-time Jetson statistics
+
+# Adjust process priority for navigation
+sudo nice -n -10 ros2 launch nav2_bringup navigation_launch.py  # Higher priority
+
+# Use Jetson power management for performance
+sudo nvpmodel -m 0  # MAX performance mode
+sudo jetson_clocks  # Lock clocks to max (use carefully)
+```
+
+---
+
+## LiDAR Integration for Navigation
+
+### LiDAR Quality Assessment
+
+Before using LiDAR data for navigation, assess quality:
+
+```python
+def assess_lidar_quality(scan_msg):
+    """Assess LiDAR data quality for navigation safety."""
+    # Calculate percentage of valid readings
+    valid_readings = sum(1 for r in scan_msg.ranges if 0.1 < r < 10.0)
+    total_readings = len(scan_msg.ranges)
+
+    quality_ratio = valid_readings / total_readings if total_readings > 0 else 0
+
+    # Check for consistency
+    range_variance = np.var([r for r in scan_msg.ranges if 0.1 < r < 10.0])
+
+    return {
+        'quality_ratio': quality_ratio,
+        'range_variance': range_variance,
+        'is_reliable': quality_ratio > 0.7 and range_variance < 1.0  # Thresholds for safety
+    }
+```
+
+### Obstacle Detection Optimization
+
+```python
+def detect_obstacles_jetson_optimized(scan_msg, min_distance=0.5):
+    """Efficient obstacle detection optimized for Jetson."""
+    # Use numpy for efficient processing
+    ranges_array = np.array(scan_msg.ranges)
+
+    # Filter valid ranges
+    valid_mask = (ranges_array > 0.1) & (ranges_array < min_distance)
+    close_obstacles = ranges_array[valid_mask]
+
+    # Count obstacles in different sectors for navigation decisions
+    angle_increment = scan_msg.angle_increment
+    num_sectors = 8
+    sector_size = len(ranges_array) // num_sectors
+
+    sector_obstacles = []
+    for i in range(num_sectors):
+        start_idx = i * sector_size
+        end_idx = start_idx + sector_size if i < num_sectors - 1 else len(ranges_array)
+
+        sector_ranges = ranges_array[start_idx:end_idx]
+        close_in_sector = np.sum((sector_ranges > 0.1) & (sector_ranges < min_distance))
+        sector_obstacles.append(close_in_sector)
+
+    return sector_obstacles
+```
+
+---
+
+## Navigation Safety and Dead Man Switch Implementation
+
+### Safety Node for Navigation
+
+<CodeExample
+  language="python"
+  title="jetson_navigation_safety.py"
+  tier="B"
+  description="Safety node implementing Dead Man Switch for navigation on Jetson."
+>
+```python
+#!/usr/bin/env python3
+"""
+Jetson Navigation Safety Node
+
+Implements safety mechanisms including Dead Man Switch pattern for
+navigation on Jetson platforms. Includes emergency stop and
+timeout-based safety controls.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from geometry_msgs.msg import Twist, PoseStamped
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
+import time
+from threading import Lock
+
+
+class JetsonNavigationSafety(Node):
+    """Safety node for Jetson navigation with Dead Man Switch implementation."""
+
+    def __init__(self):
+        super().__init__('jetson_navigation_safety')
+
+        # Safety parameters
+        self.declare_parameter('deadman_timeout', 0.1)  # 100ms timeout
+        self.declare_parameter('emergency_distance', 0.3)  # Emergency stop distance
+        self.declare_parameter('safety_enabled', True)
+
+        self.deadman_timeout = self.get_parameter('deadman_timeout').value
+        self.emergency_distance = self.get_parameter('emergency_distance').value
+        self.safety_enabled = self.get_parameter('safety_enabled').value
+
+        # Create QoS profile
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        # Create subscribers
+        self.cmd_vel_sub = self.create_subscription(
+            Twist,
+            '/cmd_vel',
+            self.cmd_vel_callback,
+            qos_profile
+        )
+
+        self.lidar_sub = self.create_subscription(
+            LaserScan,
+            '/jetson/lidar/scan',
+            self.lidar_callback,
+            qos_profile
+        )
+
+        # Create publishers
+        self.safety_cmd_pub = self.create_publisher(Twist, '/safety_cmd_vel', qos_profile)
+        self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', qos_profile)
+
+        # Safety state
+        self.last_cmd_time = self.get_clock().now()
+        self.last_cmd_vel = Twist()
+        self.obstacle_detected = False
+        self.safety_lock = Lock()
+
+        # Timer for safety checks
+        self.safety_timer = self.create_timer(0.05, self.safety_check)  # 20 Hz safety checks
+
+        self.get_logger().info('Jetson Navigation Safety node started')
+
+    def cmd_vel_callback(self, msg):
+        """Handle incoming velocity commands with safety processing."""
+        with self.safety_lock:
+            self.last_cmd_vel = msg
+            self.last_cmd_time = self.get_clock().now()
+
+    def lidar_callback(self, msg):
+        """Process LiDAR data for obstacle detection."""
+        # Check for obstacles in critical directions
+        min_distance = float('inf')
+
+        # Check forward sector (simplified)
+        forward_start = len(msg.ranges) // 2 - 10
+        forward_end = len(msg.ranges) // 2 + 10
+
+        if 0 <= forward_start < len(msg.ranges) and 0 <= forward_end < len(msg.ranges):
+            forward_ranges = msg.ranges[forward_start:forward_end]
+            valid_ranges = [r for r in forward_ranges if 0.01 < r < 10.0]
+
+            if valid_ranges:
+                min_distance = min(valid_ranges)
+
+        with self.safety_lock:
+            self.obstacle_detected = min_distance < self.emergency_distance
+
+    def safety_check(self):
+        """Perform safety checks at high frequency."""
+        current_time = self.get_clock().now()
+
+        with self.safety_lock:
+            # Check Dead Man Switch timeout
+            time_since_last_cmd = (current_time - self.last_cmd_time).nanoseconds / 1e9
+
+            # Determine if command should be passed through
+            if (time_since_last_cmd > self.deadman_timeout or
+                self.obstacle_detected or
+                not self.safety_enabled):
+
+                # Send stop command
+                stop_cmd = Twist()
+                self.safety_cmd_pub.publish(stop_cmd)
+
+                # Publish emergency stop signal
+                emergency_msg = Bool()
+                emergency_msg.data = True
+                self.emergency_stop_pub.publish(emergency_msg)
+
+                if time_since_last_cmd > self.deadman_timeout:
+                    self.get_logger().warn('Dead Man Switch timeout - stopping robot')
+                elif self.obstacle_detected:
+                    self.get_logger().warn('Obstacle detected - emergency stop')
+            else:
+                # Pass through the command
+                self.safety_cmd_pub.publish(self.last_cmd_vel)
+
+    def destroy_node(self):
+        """Ensure robot stops when node is destroyed."""
+        stop_cmd = Twist()
+        self.safety_cmd_pub.publish(stop_cmd)
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = JetsonNavigationSafety()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down safety node')
+    finally:
+        # Ensure robot stops
+        stop_cmd = Twist()
+        node.safety_cmd_pub.publish(stop_cmd)
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+---
+
+## Hands-On Exercise: Complete Navigation Deployment
+
+### Objective
+
+Deploy a complete navigation system on your Jetson platform using LiDAR for localization and navigation, with proper safety mechanisms.
+
+### Requirements
+
+1. **Hardware Setup**: Jetson with LiDAR and wheel odometry capability
+2. **Navigation Stack**: Install and configure Nav2 with Jetson-optimized parameters
+3. **Safety System**: Implement Dead Man Switch and obstacle detection
+4. **Navigation Test**: Successfully navigate to goal poses in a known environment
+
+### Implementation Steps
+
+<Exercise
+  id="ex-nav2-deployment"
+  title="Complete Nav2 Deployment on Jetson"
+  difficulty="advanced"
+  variants={[
+    {
+      tier: "B",
+      description: "Deploy complete navigation system with safety mechanisms on Jetson",
+      setup: "Ensure Jetson has LiDAR connected, wheel odometry configured, and Nav2 installed",
+      code: `#!/usr/bin/env python3
+# jetson_nav2_complete.py - Complete navigation system for Jetson
+import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionClient
+from rclpy.qos import QoSProfile
+from geometry_msgs.msg import Twist
+from nav2_msgs.action import NavigateToPose
+from sensor_msgs.msg import LaserScan
+import time
+
+class JetsonNavigationSystem(Node):
+    def __init__(self):
+        super().__init__('jetson_navigation_system')
+
+        # Create action client for navigation
+        self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+
+        # Create publishers and subscribers
+        qos = QoSProfile(depth=1)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', qos)
+        self.lidar_sub = self.create_subscription(LaserScan, '/jetson/lidar/scan', self.lidar_cb, qos)
+
+        # Navigation parameters
+        self.safety_distance = 0.5  # Stop if obstacle closer than this
+        self.navigation_active = False
+
+        self.get_logger().info('Jetson Navigation System initialized')
+
+    def lidar_cb(self, msg):
+        """Monitor for safety during navigation."""
+        if self.navigation_active:
+            # Check for obstacles in path
+            min_range = min([r for r in msg.ranges if 0.1 < r < 10.0], default=float('inf'))
+            if min_range < self.safety_distance:
+                # Stop navigation for safety
+                stop_cmd = Twist()
+                self.cmd_vel_pub.publish(stop_cmd)
+                self.get_logger().warn(f'Safety stop: obstacle at {min_range:.2f}m')
+
+    def send_navigation_goal(self, x, y, theta):
+        """Send navigation goal to Nav2."""
+        # Wait for action server
+        self.nav_client.wait_for_server()
+
+        # Create goal
+        goal = NavigateToPose.Goal()
+        goal.pose.header.frame_id = 'map'
+        goal.pose.header.stamp = self.get_clock().now().to_msg()
+        goal.pose.pose.position.x = x
+        goal.pose.pose.position.y = y
+        # Set orientation (simplified)
+        goal.pose.pose.orientation.z = 0.0
+        goal.pose.pose.orientation.w = 1.0
+
+        # Send goal
+        self.navigation_active = True
+        future = self.nav_client.send_goal_async(goal)
+        future.add_done_callback(self.goal_response_callback)
+
+    def goal_response_callback(self, future):
+        """Handle navigation goal response."""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Goal rejected')
+            self.navigation_active = False
+            return
+
+        self.get_logger().info('Goal accepted')
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(self.goal_result_callback)
+
+    def goal_result_callback(self, future):
+        """Handle navigation result."""
+        result = future.result().result
+        self.get_logger().info(f'Navigation result: {result}')
+        self.navigation_active = False
+
+def main():
+    rclpy.init()
+    node = JetsonNavigationSystem()
+
+    # Example: navigate to a specific pose
+    # node.send_navigation_goal(1.0, 1.0, 0.0)  # Uncomment to use
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down navigation system')
+    node.destroy_node()
+    rclpy.shutdown()
+      `,
+      acceptanceCriteria: [
+        "Nav2 stack runs successfully on Jetson with optimized parameters",
+        "Safety system monitors for obstacles and stops robot when needed",
+        "Navigation goals are processed and executed safely",
+        "System operates within Jetson resource constraints (CPU, memory)",
+        "Dead Man Switch pattern implemented for safety"
+      ],
+      solution: "Test with: ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose '{pose: {header: {frame_id: map}, pose: {position: {x: 1.0, y: 1.0, z: 0.0}, orientation: {w: 1.0}}}}'"
+    }
+  ]}
+/>
+
+---
+
+## Performance Monitoring and Tuning
+
+### Jetson-Specific Monitoring
+
+```bash
+# Monitor system resources during navigation
+sudo tegrastats  # Real-time CPU/GPU/memory usage
+jtop            # Jetson system monitor
+
+# Monitor ROS 2 navigation performance
+ros2 topic hz /cmd_vel                    # Check command frequency
+ros2 run tf2_tools view_frames            # Check transform quality
+ros2 run rqt_plot rqt_plot                # Plot navigation metrics
+```
+
+### Parameter Tuning Guidelines
+
+**For Resource-Constrained Performance**:
+- Reduce costmap resolution (0.05m → 0.1m)
+- Lower update frequencies (10Hz → 5Hz)
+- Reduce costmap size (10x10m → 5x5m)
+- Limit particle counts in AMCL (100 → 50)
+
+**For Safety and Reliability**:
+- Maintain conservative obstacle inflation (0.5m)
+- Keep emergency stop distances appropriate (0.3m minimum)
+- Use reliable QoS settings for critical topics
+- Implement proper timeout mechanisms
+
+---
+
+## Troubleshooting Common Issues
+
+### Performance Issues
+
+**Problem**: Nav2 running slowly or timing out on Jetson
+**Solutions**:
+- Reduce costmap resolution and size
+- Lower update frequencies in configuration
+- Use TEB local planner instead of default DWB
+- Monitor with `tegrastats` to identify bottlenecks
+
+### Localization Problems
+
+**Problem**: Robot losing localization frequently
+**Solutions**:
+- Ensure adequate lighting and visual features in environment
+- Verify LiDAR calibration and mounting
+- Adjust AMCL parameters for your environment
+- Check odometry quality and consistency
+
+### Navigation Failures
+
+**Problem**: Robot getting stuck or failing to navigate
+**Solutions**:
+- Verify costmap inflation parameters
+- Check for proper transform frames (tf tree)
+- Ensure adequate LiDAR coverage
+- Adjust local planner parameters for robot dynamics
+
+---
+
+## Summary
+
+**Key Takeaways for Nav2 on Edge Platforms**:
+
+- **Resource Optimization**: Configure Nav2 parameters specifically for Jetson's computational and memory constraints
+- **Safety First**: Implement Dead Man Switch and obstacle detection for safe navigation
+- **Quality Assessment**: Monitor sensor data quality before using for navigation
+- **Performance Monitoring**: Use Jetson-specific tools to track system performance
+- **Configuration Tuning**: Balance navigation quality with resource usage
+
+**Next Steps**:
+After mastering Nav2 deployment on edge platforms, you'll be ready for advanced perception and planning in Module 4. The navigation skills learned here form the foundation for autonomous robot systems.
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the primary safety mechanism implemented for navigation on Jetson platforms?',
+      options: [
+        'Maximum speed limiting only',
+        'Dead Man Switch pattern with timeout',
+        'Distance-based speed control',
+        'Obstacle avoidance algorithms'
+      ],
+      correctAnswer: 1,
+      explanation: 'The Dead Man Switch pattern with timeout (typically 100ms) is the primary safety mechanism that stops the robot if control commands are not received within the specified time, preventing uncontrolled movement.',
+      hint: 'Look for safety mechanisms in the navigation safety section.'
+    },
+    {
+      id: 'q2',
+      question: 'Which parameter should be reduced to optimize Nav2 performance on Jetson?',
+      options: [
+        'Costmap resolution from 0.05m to 0.1m',
+        'Update frequency from 5Hz to 10Hz',
+        'Costmap size from 5x5m to 10x10m',
+        'Particle count from 50 to 100'
+      ],
+      correctAnswer: 0,
+      explanation: 'Reducing costmap resolution (e.g., from 0.05m to 0.1m) decreases computational load and memory usage, which is crucial for Jetson\'s resource constraints.',
+      hint: 'Consider which parameter reduction would decrease computational load.'
+    },
+    {
+      id: 'q3',
+      question: 'What is the recommended Dead Man Switch timeout for navigation safety?',
+      options: [
+        '1000ms (1 second)',
+        '500ms (0.5 seconds)',
+        '100ms (0.1 seconds)',
+        '10ms (0.01 seconds)'
+      ],
+      correctAnswer: 2,
+      explanation: 'A 100ms (0.1 seconds) timeout is typically recommended for Dead Man Switch patterns in navigation, providing quick response to command failures while allowing for normal communication delays.',
+      hint: 'Review the safety implementation section for timeout values.'
+    },
+    {
+      id: 'q4',
+      question: 'Which tool is specific to Jetson platforms for monitoring system performance?',
+      options: [
+        'htop',
+        'tegrastats',
+        'top',
+        'ps'
+      ],
+      correctAnswer: 1,
+      explanation: 'tegrastats is the Jetson-specific tool for monitoring real-time CPU, GPU, memory, and power usage on NVIDIA Jetson platforms.',
+      hint: 'Look for Jetson-specific monitoring tools in the performance section.'
+    },
+    {
+      id: 'q5',
+      question: 'Why is it important to reduce costmap update frequency on Jetson?',
+      options: [
+        'To improve navigation accuracy',
+        'To reduce computational load and save resources',
+        'To increase obstacle detection range',
+        'To improve localization quality'
+      ],
+      correctAnswer: 1,
+      explanation: 'Reducing costmap update frequency decreases computational load on the resource-constrained Jetson platform, helping maintain system stability while preserving navigation functionality.',
+      hint: 'Consider the resource constraints of Jetson platforms.'
+    }
+  ]}
+/>
+
+---
+
+## What's Next?
+
+In **Module 4**, you'll explore Vision-Language-Action systems that integrate navigation with advanced perception and decision-making. The navigation foundation you've built will be essential for creating robots that can understand and interact with their environment intelligently.
+
+:::tip Preparation for Next Steps
+Practice deploying the complete navigation system in various environments and observe how different parameters affect performance on your Jetson platform.
+:::
+
+---

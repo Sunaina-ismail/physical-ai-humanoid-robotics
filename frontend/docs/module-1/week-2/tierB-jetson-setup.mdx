@@ -1,0 +1,649 @@
+---
+title: "Tier B Extension: Jetson Setup and ROS 2 Deployment"
+chapter_number: "1.2B"
+module: 1
+sidebar_position: 2
+description: "Deploy ROS 2 nodes on NVIDIA Jetson platforms for edge AI robotics applications."
+prerequisites:
+  - "Chapter 2: ROS 2 Nodes and Topics"
+  - "Basic Linux command line"
+  - "Python fundamentals"
+learning_outcomes:
+  - "Configure ROS 2 Humble on NVIDIA Jetson platform"
+  - "Deploy ROS 2 nodes to Jetson hardware for edge computing"
+  - "Optimize node performance for edge AI constraints"
+  - "Integrate Jetson-specific sensors and peripherals"
+estimated_time: 90
+tier_support:
+  A: true
+  B: true
+  C: false
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import TierBadge from '@site/src/components/TierBadge';
+
+# Tier B Extension: Jetson Setup and ROS 2 Deployment
+
+<TierBadge tiers={["B"]} />
+
+## Why This Matters
+
+In edge AI robotics, computational resources are constrained by power, thermal, and physical limitations. NVIDIA Jetson platforms (Nano, Xavier NX, Orin) bridge the gap between laptop simulation and physical robot deployment, offering GPU-accelerated inference while maintaining reasonable power consumption (~5-30W). Understanding Jetson deployment is crucial for robotics engineers who need to optimize algorithms for real hardware constraints.
+
+**Real-World Applications**:
+- **Autonomous Drones**: Jetson-powered navigation with real-time object detection
+- **Warehouse Robots**: Edge inference for obstacle detection and path planning
+- **Agricultural Robotics**: On-board processing for crop monitoring and harvesting
+
+:::danger Hardware Safety
+Before powering any Jetson hardware, ensure:
+- Use appropriate power supply (official Jetson power adapter recommended)
+- Verify correct voltage settings on development carrier board
+- Ensure adequate ventilation and thermal management
+- Keep emergency stop procedures documented and accessible
+:::
+
+---
+
+## Jetson Platform Overview
+
+### Hardware Specifications Comparison
+
+| Platform | GPU | CPU | RAM | Power | Primary Use Case |
+|----------|-----|-----|-----|-------|------------------|
+| Jetson Nano | 128-core Maxwell | Quad-core ARM A57 | 4GB LPDDR4 | 5-10W | Entry-level inference |
+| Jetson Xavier NX | 384-core Volta | Hexa-core ARM Carmel | 8GB LPDDR4 | 10-15W | Medium-complexity AI |
+| Jetson Orin NX | 1024-core Ada | Hexa-core ARM Cortex-A78AE | 8GB LPDDR5 | 15-25W | High-performance robotics |
+
+### Edge AI Constraints vs. Laptop Simulation
+
+Unlike your laptop simulation environment, Jetson platforms have specific constraints that affect ROS 2 node design:
+
+<MermaidDiagram
+  id="jetson-constraints"
+  type="graph"
+  source={`graph TD
+    A[Resource Constraints] --> B[Thermal: Limited cooling]
+    A --> C[Power: 5-30W budget]
+    A --> D[Compute: Optimized for inference]
+    B --> E[Node: Reduce CPU/GPU usage]
+    C --> F[Network: Minimize data transfer]
+    D --> G[Algorithms: Optimize for ARM architecture]
+
+    style A fill:#e1f5ff
+    style E fill:#fff4e1
+    style F fill:#fff4e1
+    style G fill:#fff4e1
+  `}
+  altText="Resource constraints on Jetson platforms: thermal limitations requiring reduced CPU/GPU usage, power budget of 5-30W requiring minimized network data transfer, and compute optimization for ARM architecture."
+  caption="Edge AI constraints on Jetson platforms compared to laptop simulation environments."
+/>
+
+---
+
+## Jetson Setup Process
+
+### Initial Hardware Setup
+
+1. **Unpack and Inspect**: Verify all components (Jetson module, carrier board, power supply, SD card)
+2. **Connect Peripherals**: Attach power supply, network cable, keyboard, mouse, monitor (HDMI)
+3. **Insert SD Card**: For Jetson Nano, insert the microSD card with pre-flashed OS
+4. **Power On**: Connect power supply and press power button (if available)
+
+### Flashing the Jetson OS
+
+For Jetson Nano with SD-CARD model, NVIDIA provides pre-built SD card images:
+
+```bash
+# 1. Download JetPack SDK Manager from NVIDIA Developer website
+# 2. Install SDK Manager on your host computer (Linux/Windows/Mac)
+# 3. Connect Jetson to host via USB
+# 4. Put Jetson in recovery mode (hold RECOVERY button, press RESET button)
+# 5. SDK Manager will detect Jetson and allow flashing
+
+# Alternative: Flash from command line
+sudo ./flash.sh jetson-nano-sd mmcblk0p1
+```
+
+### Initial System Configuration
+
+After first boot, configure the Jetson system:
+
+```bash
+# 1. Set up user account and password
+# 2. Connect to WiFi or Ethernet
+# 3. Update system packages
+sudo apt update && sudo apt upgrade -y
+
+# 4. Configure power mode (for Nano)
+sudo nvpmodel -m 0  # Maximum performance mode
+sudo jetson_clocks  # Lock clocks to maximum performance
+
+# 5. Verify GPU access
+nvidia-smi
+```
+
+---
+
+## ROS 2 Humble Installation on Jetson
+
+### Prerequisites Installation
+
+```bash
+# Update package lists
+sudo apt update
+
+# Install locale prerequisites
+sudo apt install locales
+sudo locale-gen en_US en_US.UTF-8
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+
+# Add ROS 2 apt repository
+sudo apt install software-properties-common
+sudo add-apt-repository universe
+
+# Install curl and OS-specific packages
+sudo apt install curl gnupg lsb-release
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+# Add ROS 2 repository to sources list
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(source /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# Update package lists again
+sudo apt update
+```
+
+### Install ROS 2 Humble
+
+```bash
+# Install ROS 2 base packages
+sudo apt install ros-humble-ros-base
+
+# Install additional packages for robotics
+sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
+sudo apt install ros-humble-rosbridge-suite ros-humble-teleop-tools
+
+# Install Python development packages
+sudo apt install python3-argcomplete python3-colcon-common-extensions
+sudo apt install python3-rosdep python3-rosinstall python3-rosinstall-generator
+```
+
+### Environment Setup
+
+```bash
+# Add ROS 2 setup to bashrc
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+# Install Python packages
+pip3 install --upgrade pip
+pip3 install rclpy sensor-msgs geometry-msgs cv-bridge
+```
+
+---
+
+## Optimizing ROS 2 Nodes for Jetson
+
+### Resource-Aware Node Design
+
+When deploying ROS 2 nodes to Jetson, consider these optimization strategies:
+
+<MermaidDiagram
+  id="node-optimization"
+  type="flowchart"
+  source={`flowchart TD
+    A[Node Creation] --> B[Threading Strategy]
+    A --> C[QoS Configuration]
+    A --> D[Message Size Optimization]
+
+    B --> E[Use single-threaded executor<br/>to reduce overhead]
+    C --> F[Use BEST_EFFORT for<br/>high-frequency sensor data]
+    D --> G[Compress images before<br/>publishing to /image_raw]
+
+    E --> H[Deployed Node]
+    F --> H
+    G --> H
+
+    style A fill:#e1f5ff
+    style H fill:#f0ffe1
+  `}
+  altText="Node optimization process for Jetson deployment: threading strategy with single-threaded executor, QoS configuration with best-effort for high-frequency data, and message size optimization through image compression."
+  caption="Optimization strategies for deploying ROS 2 nodes on resource-constrained Jetson platforms."
+/>
+
+### Example: Optimized Image Publisher for Jetson
+
+<CodeExample
+  language="python"
+  title="jetson_camera_publisher.py"
+  tier="B"
+  description="ROS 2 publisher optimized for Jetson hardware with reduced resource usage."
+>
+```python
+#!/usr/bin/env python3
+"""
+Jetson-Optimized Camera Publisher Node
+
+This node is optimized for Jetson hardware constraints:
+- Single-threaded execution to reduce overhead
+- Image compression to minimize bandwidth
+- Reduced frame rate to conserve CPU/GPU
+- Proper QoS settings for edge deployment
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+
+class JetsonCameraPublisher(Node):
+    """Camera publisher optimized for Jetson hardware constraints."""
+
+    def __init__(self):
+        super().__init__('jetson_camera_publisher')
+
+        # Create QoS profile optimized for edge computing
+        # BEST_EFFORT for high-frequency sensor data to reduce network overhead
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,  # Minimal buffering to save memory
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        # Create publisher with optimized QoS
+        self.publisher = self.create_publisher(
+            Image,
+            '/jetson/camera/image_raw',
+            qos_profile
+        )
+
+        # Initialize OpenCV bridge for image conversion
+        self.bridge = CvBridge()
+
+        # Use timer for controlled frame rate (lower than desktop to conserve resources)
+        # 5 FPS instead of 30 FPS to reduce CPU/GPU usage
+        self.timer = self.create_timer(0.2, self.publish_camera_image)  # 5 Hz
+
+        # Initialize camera (adjust device index as needed)
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            self.get_logger().error('Could not open camera')
+            return
+
+        # Set lower resolution to reduce processing load
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        self.get_logger().info('Jetson-optimized camera publisher started')
+
+    def publish_camera_image(self):
+        """Publish camera image with Jetson-specific optimizations."""
+        ret, frame = self.cap.read()
+        if not ret:
+            self.get_logger().warn('Failed to read from camera')
+            return
+
+        # Convert OpenCV image to ROS Image message
+        try:
+            ros_image = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+            ros_image.header.stamp = self.get_clock().now().to_msg()
+
+            # Publish with resource-conscious approach
+            self.publisher.publish(ros_image)
+
+        except Exception as e:
+            self.get_logger().error(f'Error converting image: {e}')
+
+    def destroy_node(self):
+        """Clean up resources when node is destroyed."""
+        if self.cap.isOpened():
+            self.cap.release()
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    # Use single-threaded executor to minimize overhead on constrained hardware
+    node = JetsonCameraPublisher()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Node stopped by user')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+### Performance Monitoring on Jetson
+
+```bash
+# Monitor Jetson performance during ROS 2 operation
+sudo tegrastats  # Real-time CPU/GPU/memory usage
+
+# ROS 2 specific monitoring
+ros2 topic hz /jetson/camera/image_raw  # Check actual publish rate
+ros2 node info /jetson_camera_publisher  # Check node status
+ros2 lifecycle list /jetson_camera_publisher  # Check lifecycle state
+
+# System resource monitoring
+jtop  # Jetson-specific system monitor (install with: sudo -H pip install jtop)
+```
+
+---
+
+## Jetson-Specific Sensor Integration
+
+### Common Jetson Sensors and ROS 2 Drivers
+
+| Sensor Type | Jetson Interface | ROS 2 Package | Use Case |
+|-------------|------------------|---------------|----------|
+| CSI Camera | MIPI CSI-2 | `nvidia_isaac_ros_gmsl` | High-bandwidth camera |
+| USB Camera | USB 3.0 | `usb_cam` | Standard webcam integration |
+| LiDAR | UART/SPI | `sllidar_ros2` | 2D mapping and navigation |
+| IMU | I2C/SPI | `imu_tools` | Orientation and stabilization |
+
+### Example: USB Camera Integration
+
+```bash
+# Install USB camera package
+sudo apt install ros-humble-usb-cam
+
+# Launch USB camera node with Jetson-specific parameters
+ros2 run usb_cam usb_cam_node_exe \
+  --ros-args \
+  -p video_device:=/dev/video0 \
+  -p framerate:=5 \  # Lower frame rate for Jetson
+  -p image_width:=640 \
+  -p image_height:=480 \
+  -p pixel_format:=yuyv \
+  -r /usb_cam/image_raw:=/jetson/camera/image_raw
+```
+
+---
+
+## Hands-On Exercise: Deploy ROS 2 Node to Jetson
+
+### Objective
+
+Deploy a temperature monitoring system from Chapter 2 to your Jetson platform and optimize it for edge computing constraints.
+
+### Requirements
+
+1. **Hardware Setup**: Jetson Nano/NX/AGX with Ubuntu 20.04 and ROS 2 Humble
+2. **Network Configuration**: Jetson connected to same network as development machine
+3. **ROS 2 Installation**: Complete ROS 2 Humble installation on Jetson
+4. **Cross-Platform Communication**: Configure ROS 2 to communicate between laptop and Jetson
+
+### Implementation Steps
+
+<Exercise
+  id="ex-jetson-deployment"
+  title="Jetson ROS 2 Deployment"
+  difficulty="intermediate"
+  variants={[
+    {
+      tier: "B",
+      description: "Deploy and optimize temperature monitoring system on Jetson hardware",
+      setup: "Ensure Jetson is powered on, connected to network, and ROS 2 Humble is installed",
+      code: `#!/usr/bin/env python3
+# jetson_temp_monitor.py - Optimized for Jetson constraints
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from std_msgs.msg import Float32
+import random
+import time
+
+class JetsonTempMonitor(Node):
+    def __init__(self):
+        super().__init__('jetson_temp_monitor')
+
+        # Optimize QoS for edge deployment
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        self.publisher = self.create_publisher(Float32, '/jetson/temperature', qos_profile)
+        self.timer = self.create_timer(2.0, self.publish_temp)  # Lower frequency for Jetson
+
+        self.get_logger().info('Jetson Temperature Monitor started')
+
+    def publish_temp(self):
+        msg = Float32()
+        # Simulate temperature sensor with realistic range for Jetson under load
+        msg.data = 35.0 + random.uniform(0.0, 10.0)  # 35-45°C typical for Jetson
+        self.publisher.publish(msg)
+        self.get_logger().info(f'Jetson Temp: {msg.data:.2f}°C')
+
+def main():
+    rclpy.init()
+    node = JetsonTempMonitor()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down')
+    node.destroy_node()
+    rclpy.shutdown()
+      `,
+      acceptanceCriteria: [
+        "ROS 2 node runs successfully on Jetson hardware",
+        "Node uses optimized QoS settings for edge deployment",
+        "Temperature data publishes at appropriate frequency (not too high for Jetson)",
+        "Node can be monitored from development laptop using ROS 2 tools"
+      ],
+      solution: "Verify with: ros2 topic echo /jetson/temperature on your laptop while node runs on Jetson"
+    }
+  ]}
+/>
+
+### Cross-Platform Communication Setup
+
+To communicate between your laptop and Jetson:
+
+```bash
+# On both machines, set the same ROS domain
+export ROS_DOMAIN_ID=1
+
+# On your laptop, set ROS to find the Jetson
+export ROS_IP=<JETSON_IP_ADDRESS>  # Replace with actual Jetson IP
+
+# On Jetson, set ROS to find the laptop
+export ROS_IP=<LAPTOP_IP_ADDRESS>  # Replace with actual laptop IP
+
+# Verify communication
+# From laptop: ros2 topic list (should show Jetson topics)
+# From Jetson: ros2 topic list (should show laptop topics)
+```
+
+---
+
+## Performance Optimization Strategies
+
+### Memory Management on Jetson
+
+```python
+# Example: Memory-efficient image processing on Jetson
+import numpy as np
+import cv2
+
+def process_image_jetson_optimized(raw_image):
+    """
+    Memory-efficient image processing for Jetson constraints.
+    Avoids creating unnecessary copies of large arrays.
+    """
+    # Process in-place when possible
+    small_image = cv2.resize(raw_image, (320, 240))  # Reduce size early
+
+    # Use numpy operations efficiently
+    gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
+
+    # Apply processing with minimal memory overhead
+    edges = cv2.Canny(gray, 50, 150)
+
+    return edges
+```
+
+### CPU/GPU Load Balancing
+
+```bash
+# Monitor and control CPU/GPU usage on Jetson
+sudo nvpmodel -q  # Query current power model
+sudo nvpmodel -m 0  # Set to maximum performance mode
+sudo jetson_clocks  # Lock to maximum clocks (use carefully)
+
+# For thermal management, consider lower power modes
+sudo nvpmodel -m 1  # Balanced mode
+sudo jetson_clocks --restore  # Restore default clocks
+```
+
+---
+
+## Troubleshooting Common Jetson Issues
+
+### Performance Issues
+
+**Problem**: ROS 2 nodes running slowly on Jetson
+**Solution**:
+- Check thermal throttling with `sudo tegrastats`
+- Reduce node frequency (publish/subscribe rates)
+- Optimize image processing (reduce resolution, use efficient algorithms)
+- Use single-threaded executors to reduce overhead
+
+### Network Communication Issues
+
+**Problem**: Laptop and Jetson cannot communicate via ROS 2
+**Solution**:
+- Verify both machines are on same network
+- Check ROS_DOMAIN_ID matches on both machines
+- Ensure firewall allows ROS 2 traffic (ports 11311 and random high ports)
+- Test with `ping <jetson_ip>` from laptop and vice versa
+
+### Resource Constraints
+
+**Problem**: Jetson running out of memory or CPU
+**Solution**:
+- Monitor with `jtop` to identify bottlenecks
+- Reduce image resolution/frame rates
+- Use more efficient data types (Float32 instead of Float64)
+- Implement proper QoS policies to reduce buffering
+
+---
+
+## Summary
+
+**Key Takeaways for Jetson Deployment**:
+
+- **Resource Constraints**: Jetson platforms have thermal, power, and compute limitations that require optimized ROS 2 nodes
+- **QoS Optimization**: Use BEST_EFFORT for high-frequency data and minimal buffering to conserve resources
+- **Performance Monitoring**: Use `tegrastats` and `jtop` to monitor Jetson-specific metrics
+- **Cross-Platform Communication**: Configure ROS_DOMAIN_ID and network settings for laptop-Jetson communication
+- **Safety First**: Always implement proper thermal management and emergency procedures when deploying to hardware
+
+**Next Steps**:
+After mastering Jetson deployment, you'll be ready for more complex sensor integration in Module 2 and navigation systems in Module 3. The optimization techniques learned here will be essential for deploying sophisticated robotics algorithms on resource-constrained hardware.
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the primary advantage of using NVIDIA Jetson platforms for robotics compared to laptop simulation?',
+      options: [
+        'Unlimited computational power',
+        'GPU-accelerated inference with reasonable power consumption (~5-30W)',
+        'Identical performance to high-end gaming laptops',
+        'No thermal or power constraints'
+      ],
+      correctAnswer: 1,
+      explanation: 'Jetson platforms provide GPU-accelerated inference while maintaining reasonable power consumption (5-30W), bridging the gap between simulation and physical robot deployment. This makes them ideal for edge AI robotics applications.',
+      hint: 'Review the "Why This Matters" section on edge AI constraints.'
+    },
+    {
+      id: 'q2',
+      question: 'Which QoS policy should you use for high-frequency sensor data on Jetson to optimize resource usage?',
+      options: [
+        'RELIABLE - Guarantee every message arrives',
+        'BEST_EFFORT - Send and forget, reduce overhead',
+        'KEEP_ALL history - Buffer all messages',
+        'TRANSIENT_LOCAL durability - Store last message'
+      ],
+      correctAnswer: 1,
+      explanation: 'BEST_EFFORT is optimal for high-frequency sensor data on resource-constrained Jetson platforms. It reduces network overhead and prevents buffer bloat that could impact performance on edge hardware.',
+      hint: 'Consider the resource constraints of Jetson platforms when choosing QoS policies.'
+    },
+    {
+      id: 'q3',
+      question: 'What is the recommended approach for threading in ROS 2 nodes deployed to Jetson hardware?',
+      options: [
+        'Multi-threaded executors for maximum performance',
+        'Single-threaded executors to reduce overhead',
+        'Custom threading models for each node',
+        'No specific threading recommendations'
+      ],
+      correctAnswer: 1,
+      explanation: 'Single-threaded executors are recommended for Jetson deployment to minimize overhead on resource-constrained hardware. This reduces the complexity and resource usage compared to multi-threaded approaches.',
+      hint: 'Review the "Optimizing ROS 2 Nodes for Jetson" section.'
+    },
+    {
+      id: 'q4',
+      question: 'Which command is used to monitor real-time CPU/GPU usage on Jetson platforms?',
+      options: [
+        'top',
+        'htop',
+        'tegrastats',
+        'nvidia-smi'
+      ],
+      correctAnswer: 2,
+      explanation: 'tegrastats is the Jetson-specific command for real-time monitoring of CPU, GPU, memory, and power usage. It provides detailed information about Jetson platform performance.',
+      hint: 'Look for Jetson-specific monitoring tools in the performance section.'
+    },
+    {
+      id: 'q5',
+      question: 'What should you do before powering any Jetson hardware?',
+      options: [
+        'Install all ROS 2 packages immediately',
+        'Run performance benchmarks',
+        'Ensure proper power supply, voltage settings, and ventilation',
+        'Connect to the internet first'
+      ],
+      correctAnswer: 2,
+      explanation: 'Before powering Jetson hardware, ensure you use the appropriate power supply, verify correct voltage settings on the development carrier board, and ensure adequate ventilation. Safety comes first in hardware deployment.',
+      hint: 'Check the safety admonition at the beginning of the chapter.'
+    }
+  ]}
+/>
+
+---
+
+## What's Next?
+
+In **Module 2, Week 6-7**, you'll explore digital twins and simulation environments. The Jetson deployment skills you've learned will be valuable when you need to deploy simulation-to-reality transfer algorithms to edge hardware.
+
+In **Module 3, Week 8-10**, you'll work with navigation systems using Nav2. The optimization techniques from this chapter will be essential for deploying navigation algorithms to resource-constrained platforms.
+
+:::tip Preparation for Next Steps
+Practice the cross-platform communication setup between your laptop and Jetson. This will be crucial when you start integrating simulation and real-world systems.
+:::
+
+---

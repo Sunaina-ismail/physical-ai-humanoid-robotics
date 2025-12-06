@@ -1,0 +1,954 @@
+---
+sidebar_position: 14
+title: "Chapter 14: GPU Physics & Rendering"
+description: "Explore GPU-accelerated physics simulation and photorealistic rendering techniques for high-fidelity robotics simulation and AI training."
+tags: [gpu, physics, rendering, simulation, isaac-sim, omniverse, robotics]
+tier: B
+prerequisites: ["Module 1: ROS 2 Fundamentals", "Module 2: Isaac Sim Essentials", "Basic understanding of computer graphics"]
+learning_outcomes: ["Understand GPU-accelerated physics simulation", "Implement photorealistic rendering techniques", "Optimize simulation performance", "Create realistic sensor simulation"]
+---
+
+# Chapter 14: GPU Physics & Rendering
+
+## Introduction
+
+Modern robotics simulation demands computational power that can only be met by leveraging GPU acceleration. NVIDIA's Isaac Sim and Omniverse platform utilize advanced GPU technologies to provide both physically accurate simulation and photorealistic rendering. This chapter explores how GPU-accelerated physics and rendering enable high-fidelity robotics simulation that closely matches real-world conditions.
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+- Understand GPU-accelerated physics simulation principles
+- Configure advanced rendering techniques in Isaac Sim
+- Optimize simulation performance for complex scenes
+- Implement realistic sensor simulation using GPU rendering
+
+## Prerequisites
+
+Before starting this chapter, ensure you have:
+- Completed Module 1 (ROS 2 fundamentals)
+- Module 2 Chapter 13 (Isaac Sim Essentials)
+- Understanding of basic computer graphics concepts
+- NVIDIA GPU with CUDA support
+
+## Real-World Analogy: Movie Studio vs. Webcam
+
+GPU-accelerated rendering in robotics simulation is like the difference between a Hollywood movie studio and a webcam. A webcam provides basic video capture with limited quality, while a movie studio uses professional cameras, lighting, and post-production to create photorealistic scenes. Similarly, traditional CPU-based simulation provides basic physics, while GPU-accelerated simulation delivers photorealistic rendering and physically accurate simulation that can generate training data indistinguishable from reality.
+
+## Core Concepts
+
+### 1. GPU-Accelerated Physics (PhysX)
+
+NVIDIA's PhysX engine leverages GPU parallelism for:
+- Rigid body dynamics simulation
+- Soft body and cloth simulation
+- Fluid simulation
+- Contact resolution and collision detection
+
+### 2. Real-Time Ray Tracing
+
+Modern GPUs support real-time ray tracing for:
+- Accurate lighting and shadows
+- Global illumination
+- Reflections and refractions
+- Physically-based rendering (PBR)
+
+### 3. USD (Universal Scene Description)
+
+The foundation for GPU-accelerated rendering:
+- Hierarchical scene representation
+- Material and shader definitions
+- Animation and simulation data
+- Multi-GPU rendering support
+
+## GPU Physics Implementation
+
+### PhysX Configuration
+
+```python
+# Advanced PhysX configuration for GPU acceleration
+import carb
+from omni.isaac.core import World
+from omni.physx import get_physx_interface
+
+class GPUAcceleratedPhysics:
+    def __init__(self):
+        # Initialize world with GPU physics
+        self.world = World(stage_units_in_meters=1.0)
+
+        # Configure PhysX for GPU acceleration
+        self._configure_physx_gpu()
+
+    def _configure_physx_gpu(self):
+        """Configure PhysX for GPU acceleration"""
+        # Enable GPU dynamics
+        carb.settings.get_settings().set("/physics/phxgpu/enableGPUDynamics", True)
+        carb.settings.get_settings().set("/physics/phxgpu/bufferCaching", True)
+
+        # Set GPU simulation parameters
+        carb.settings.get_settings().set("/physics/phxgpu/maxGpuHeapSize", 640000000)  # 640MB
+        carb.settings.get_settings().set("/physics/phxgpu/maxCudaContexts", 1)
+
+        # Configure solver settings for GPU
+        carb.settings.get_settings().set("/physics/solverPositionIterationCount", 8)
+        carb.settings.get_settings().set("/physics/solverVelocityIterationCount", 1)
+
+    def setup_complex_scene(self):
+        """Setup a scene with many interacting objects"""
+        from omni.isaac.core.utils.prims import create_primitive
+        import numpy as np
+
+        # Create a large number of objects for GPU physics testing
+        for i in range(100):
+            x = np.random.uniform(-3, 3)
+            y = np.random.uniform(-3, 3)
+            z = np.random.uniform(5, 10)  # Drop from height
+
+            create_primitive(
+                prim_path=f"/World/Object_{i}",
+                primitive_type="Sphere",
+                primitive_props={
+                    "radius": np.random.uniform(0.05, 0.15),
+                    "position": [x, y, z],
+                    "color": np.random.random(3)  # Random color
+                },
+                physics_props={
+                    "mass": np.random.uniform(0.1, 1.0),
+                    "restitution": np.random.uniform(0.1, 0.8),  # Bounciness
+                    "static_friction": np.random.uniform(0.1, 0.5),
+                    "dynamic_friction": np.random.uniform(0.1, 0.5)
+                }
+            )
+
+    def run_simulation(self, steps=5000):
+        """Run GPU-accelerated physics simulation"""
+        self.world.reset()
+
+        for step in range(steps):
+            # Step the simulation
+            self.world.step(render=True)
+
+            # Monitor performance
+            if step % 500 == 0:
+                print(f"Step {step}: Physics running on GPU")
+
+                # Get physics stats
+                physx_interface = get_physx_interface()
+                stats = physx_interface.get_stats()
+                print(f"  GPU utilization: {stats.gpu_compute_time}ms")
+
+# Usage example
+gpu_physics = GPUAcceleratedPhysics()
+gpu_physics.setup_complex_scene()
+gpu_physics.run_simulation()
+```
+
+### Soft Body Simulation
+
+```python
+# Example: Soft body simulation with GPU acceleration
+def setup_soft_body_simulation():
+    """Setup soft body simulation using GPU acceleration"""
+
+    # Soft body properties for cloth simulation
+    soft_body_config = {
+        "volumeStiffness": 1.0,
+        "stretchingStiffness": 1.0,
+        "bendingStiffness": 0.5,
+        "shearStiffness": 0.5,
+        "dampingCoefficient": 0.01,
+        "dragCoefficient": 0.0,
+        "liftCoefficient": 0.0
+    }
+
+    # Create soft body cloth
+    from omni.isaac.core.utils.prims import create_primitive
+
+    # Note: Soft body simulation requires specific USD setup
+    # This is a simplified example
+    cloth_prim = create_primitive(
+        prim_path="/World/Cloth",
+        primitive_type="Cuboid",
+        primitive_props={
+            "size": [2.0, 2.0, 0.01],  # Very thin cuboid as placeholder
+            "position": [0.0, 0.0, 5.0]
+        },
+        physics_props={
+            "mass": 0.5,
+            "kinematic": False
+        }
+    )
+
+    return cloth_prim
+```
+
+## Advanced Rendering Techniques
+
+### Physically Based Rendering (PBR)
+
+```python
+# Configure PBR materials for photorealistic rendering
+from omni.isaac.core.materials import VisualizationMaterial
+from omni.kit.primitive.mesh import SphereMesh
+import numpy as np
+
+def create_pbr_materials():
+    """Create photorealistic PBR materials"""
+
+    # Metallic material (chrome, steel, etc.)
+    metallic_material = VisualizationMaterial(
+        prim_path="/World/Looks/Metallic",
+        diffuse_color=np.array([0.1, 0.1, 0.1]),  # Dark base
+        specular_color=np.array([0.9, 0.9, 0.9]),  # High specular
+        metallic_factor=1.0,  # Fully metallic
+        roughness_factor=0.1,  # Smooth surface
+        clearcoat_factor=0.0,
+        clearcoat_roughness_factor=0.0,
+        opacity=1.0
+    )
+
+    # Plastic material
+    plastic_material = VisualizationMaterial(
+        prim_path="/World/Looks/Plastic",
+        diffuse_color=np.array([0.8, 0.2, 0.2]),  # Red plastic
+        specular_color=np.array([0.5, 0.5, 0.5]),
+        metallic_factor=0.0,  # Non-metallic
+        roughness_factor=0.3,  # Slightly rough
+        clearcoat_factor=0.5,  # Some coating
+        clearcoat_roughness_factor=0.1,
+        opacity=1.0
+    )
+
+    # Rough material (wood, concrete)
+    rough_material = VisualizationMaterial(
+        prim_path="/World/Looks/Rough",
+        diffuse_color=np.array([0.6, 0.5, 0.4]),  # Earth tone
+        specular_color=np.array([0.2, 0.2, 0.2]),
+        metallic_factor=0.0,
+        roughness_factor=0.8,  # Very rough
+        clearcoat_factor=0.0,
+        clearcoat_roughness_factor=0.0,
+        opacity=1.0
+    )
+
+    return metallic_material, plastic_material, rough_material
+
+# Apply materials to objects
+def apply_materials_to_scene():
+    """Apply PBR materials to scene objects"""
+    materials = create_pbr_materials()
+
+    # Create objects and apply materials
+    from omni.isaac.core.utils.prims import create_primitive
+
+    # Metallic sphere
+    sphere1 = create_primitive(
+        prim_path="/World/MetallicSphere",
+        primitive_type="Sphere",
+        primitive_props={
+            "radius": 0.3,
+            "position": [-2, 0, 1]
+        }
+    )
+    materials[0].apply(sphere1)  # Apply metallic material
+
+    # Plastic cube
+    cube1 = create_primitive(
+        prim_path="/World/PlasticCube",
+        primitive_type="Cuboid",
+        primitive_props={
+            "size": [0.5, 0.5, 0.5],
+            "position": [0, 0, 1]
+        }
+    )
+    materials[1].apply(cube1)  # Apply plastic material
+
+    # Rough cylinder
+    cylinder1 = create_primitive(
+        prim_path="/World/RoughCylinder",
+        primitive_type="Cylinder",
+        primitive_props={
+            "radius": 0.2,
+            "height": 0.6,
+            "position": [2, 0, 1]
+        }
+    )
+    materials[2].apply(cylinder1)  # Apply rough material
+```
+
+### Advanced Lighting Systems
+
+```python
+# Configure advanced lighting for photorealistic rendering
+def setup_advanced_lighting():
+    """Setup advanced lighting system"""
+
+    # Create dome light for environment lighting
+    from omni.kit.commands import Execute
+    Execute(
+        "CreateDomeLightCommand",
+        prim_path="/World/DomeLight",
+        intensity=3000,
+        color=(0.8, 0.8, 1.0),  # Slightly blue-white
+        texture_file="path/to/hdri/environment.hdr"  # Optional HDR environment map
+    )
+
+    # Add directional sun light
+    Execute(
+        "CreateDistantLightCommand",
+        prim_path="/World/SunLight",
+        intensity=1000,
+        color=(1.0, 0.95, 0.9),
+        direction=(-0.5, -1.0, -0.8)  # Light direction
+    )
+
+    # Add spot lights for focused illumination
+    Execute(
+        "CreateSpotLightCommand",
+        prim_path="/World/SpotLight1",
+        intensity=500,
+        color=(1.0, 1.0, 1.0),
+        inner_cone_angle=30,
+        outer_cone_angle=45,
+        position=(0, -3, 3),
+        direction=(0, 1, -1)
+    )
+
+    Execute(
+        "CreateSpotLightCommand",
+        prim_path="/World/SpotLight2",
+        intensity=500,
+        color=(1.0, 0.9, 0.8),
+        inner_cone_angle=25,
+        outer_cone_angle=40,
+        position=(3, 2, 2),
+        direction=(-1, -1, -0.5)
+    )
+
+# Configure rendering settings
+def configure_rendering_settings():
+    """Configure advanced rendering settings"""
+
+    # Enable RTX features
+    carb.settings.get_settings().set("/rtx/sceneDb/enable", True)
+    carb.settings.get_settings().set("/rtx/domeLight/enable", True)
+    carb.settings.get_settings().set("/rtx/distantLight/enable", True)
+
+    # Configure global illumination
+    carb.settings.get_settings().set("/rtx/indirectDiffuseLighting/enabled", True)
+    carb.settings.get_settings().set("/rtx/indirectSpecularLighting/enabled", True)
+
+    # Enable denoisers for clean rendering
+    carb.settings.get_settings().set("/rtx/denoise/enable", True)
+    carb.settings.get_settings().set("/rtx/denoise/enableDlss", True)
+
+    # Configure ray tracing quality
+    carb.settings.get_settings().set("/rtx/raytracing/cullBackFaces", False)
+    carb.settings.get_settings().set("/rtx/raytracing/shadows", True)
+    carb.settings.get_settings().set("/rtx/raytracing/reflections", True)
+    carb.settings.get_settings().set("/rtx/raytracing/refractions", True)
+```
+
+## Performance Optimization
+
+### Multi-GPU Configuration
+
+```python
+# Configure multi-GPU setup for large simulations
+def configure_multi_gpu():
+    """Configure multi-GPU setup for large-scale simulation"""
+
+    # Enable multi-GPU support
+    carb.settings.get_settings().set("/renderer/multiGpu/enabled", True)
+
+    # Configure GPU assignment
+    carb.settings.get_settings().set("/renderer/multiGpu/primaryGpu", 0)
+    carb.settings.get_settings().set("/renderer/multiGpu/physicsGpu", 0)  # GPU for physics
+    carb.settings.get_settings().set("/renderer/multiGpu/renderingGpu", 1)  # GPU for rendering
+
+    # Memory management
+    carb.settings.get_settings().set("/renderer/multiGpu/maxTextureMemory", 4000000000)  # 4GB
+    carb.settings.get_settings().set("/renderer/multiGpu/maxGeometryMemory", 2000000000)  # 2GB
+
+# Scene optimization techniques
+class SceneOptimizer:
+    def __init__(self, world):
+        self.world = world
+
+    def optimize_for_performance(self):
+        """Apply performance optimizations"""
+
+        # Level of detail (LOD) configuration
+        self._setup_lod_system()
+
+        # Instance rendering for repeated objects
+        self._enable_instancing()
+
+        # Occlusion culling
+        self._setup_occlusion_culling()
+
+        # Texture streaming
+        self._enable_texture_streaming()
+
+    def _setup_lod_system(self):
+        """Setup Level of Detail system"""
+        # Configure LOD distances
+        lod_settings = {
+            "lod0_distance": 5.0,  # High detail up to 5m
+            "lod1_distance": 15.0, # Medium detail from 5-15m
+            "lod2_distance": 30.0, # Low detail from 15-30m
+            "lod3_distance": 100.0 # Very low detail beyond 30m
+        }
+
+        carb.settings.get_settings().set("/app/scene/lod0Distance", lod_settings["lod0_distance"])
+        carb.settings.get_settings().set("/app/scene/lod1Distance", lod_settings["lod1_distance"])
+        carb.settings.get_settings().set("/app/scene/lod2Distance", lod_settings["lod2_distance"])
+        carb.settings.get_settings().set("/app/scene/lod3Distance", lod_settings["lod3_distance"])
+
+    def _enable_instancing(self):
+        """Enable GPU instancing for repeated objects"""
+        carb.settings.get_settings().set("/renderer/scene/enableInstancing", True)
+        carb.settings.get_settings().set("/renderer/scene/maxInstancesPerBatch", 1024)
+
+    def _setup_occlusion_culling(self):
+        """Setup occlusion culling to hide non-visible objects"""
+        carb.settings.get_settings().set("/renderer/scene/enableOcclusionCulling", True)
+        carb.settings.get_settings().set("/renderer/scene/occlusionCullingThreshold", 0.1)
+
+    def _enable_texture_streaming(self):
+        """Enable texture streaming for large scenes"""
+        carb.settings.get_settings().set("/renderer/texturePool/enableStreaming", True)
+        carb.settings.get_settings().set("/renderer/texturePool/maxTexturePoolSize", 2000000000)  # 2GB
+```
+
+## Realistic Sensor Simulation
+
+### Camera with GPU-Accelerated Rendering
+
+```python
+# GPU-accelerated camera simulation with realistic effects
+from omni.isaac.sensor import Camera
+import numpy as np
+
+class GPUCameraSensor:
+    def __init__(self, prim_path, position, resolution=(640, 480)):
+        # Create camera with GPU-accelerated rendering
+        self.camera = Camera(
+            prim_path=prim_path,
+            position=position,
+            frequency=30,  # 30 Hz
+            resolution=resolution
+        )
+
+        # Initialize camera
+        self.camera.initialize()
+
+        # Configure realistic camera properties
+        self._configure_realistic_camera()
+
+    def _configure_realistic_camera(self):
+        """Configure camera with realistic properties"""
+        # Set camera intrinsics
+        self.camera.focal_length = 24.0  # mm
+        self.camera.focus_distance = 10.0  # meters
+        self.camera.horizontal_aperture = 36.0  # mm
+        self.camera.vertical_aperture = 24.0  # mm
+
+        # Add realistic camera effects
+        self.camera.set_focal_distance(10.0)
+        self.camera.set_focus_distance(10.0)
+
+    def get_realistic_image(self):
+        """Get image with realistic effects applied"""
+        # Get raw image data
+        raw_image = self.camera.get_rgb()
+
+        # Apply realistic camera effects (lens distortion, noise, etc.)
+        processed_image = self._apply_camera_effects(raw_image)
+
+        return processed_image
+
+    def _apply_camera_effects(self, image):
+        """Apply realistic camera effects"""
+        # Add realistic noise model
+        noise = np.random.normal(0, 0.01, image.shape)  # Gaussian noise
+        noisy_image = np.clip(image + noise, 0, 1)
+
+        # Apply lens distortion (simplified model)
+        # In practice, this would use proper distortion coefficients
+        distorted_image = self._apply_lens_distortion(noisy_image)
+
+        return distorted_image
+
+    def _apply_lens_distortion(self, image):
+        """Apply simplified lens distortion"""
+        # This is a simplified example - real implementation would be more complex
+        # and use proper distortion coefficients
+        height, width = image.shape[:2]
+
+        # Create coordinate grids
+        x = np.linspace(-1, 1, width)
+        y = np.linspace(-1, 1, height)
+        X, Y = np.meshgrid(x, y)
+
+        # Apply radial distortion
+        r_squared = X**2 + Y**2
+        distortion_coeff = 0.1
+        distorted_X = X * (1 + distortion_coeff * r_squared)
+        distorted_Y = Y * (1 + distortion_coeff * r_squared)
+
+        # This is a simplified distortion model
+        # Real implementation would use proper OpenCV distortion models
+        return image
+
+# Usage example
+gpu_camera = GPUCameraSensor(
+    prim_path="/World/Robot/Camera",
+    position=np.array([0.1, 0.0, 0.1]),
+    resolution=(1280, 720)
+)
+```
+
+### LIDAR with Realistic Physics
+
+```python
+# Realistic LIDAR simulation using GPU physics
+from omni.isaac.range_sensor import RotatingLidarPhysX
+import numpy as np
+
+class RealisticLidarSensor:
+    def __init__(self, prim_path, position):
+        # Create realistic LIDAR with GPU acceleration
+        self.lidar = RotatingLidarPhysX(
+            prim_path=prim_path,
+            position=position,
+            rotation_rate=10,  # 10 Hz rotation
+            sensor_period=0.05,  # 20 Hz sampling
+            horizontal_samples=1080,  # High resolution
+            vertical_samples=64,  # Multi-layer
+            horizontal_fov=360,
+            vertical_fov=30,  # 30 degree vertical FOV
+            range_threshold=50.0,  # 50m max range
+            rotation_direction=1  # Clockwise
+        )
+
+        # Initialize LIDAR
+        self.lidar.initialize()
+
+        # Configure realistic LIDAR properties
+        self._configure_realistic_lidar()
+
+    def _configure_realistic_lidar(self):
+        """Configure realistic LIDAR properties"""
+        # Add noise to simulate real sensor characteristics
+        self.noise_std = 0.02  # 2cm standard deviation
+        self.miss_detection_prob = 0.001  # 0.1% chance of missing detection
+
+    def get_realistic_scan(self):
+        """Get realistic LIDAR scan with noise and imperfections"""
+        # Get raw LIDAR data
+        raw_scan = self.lidar.get_linear_depth_data()
+
+        # Apply realistic noise model
+        noisy_scan = self._add_realistic_noise(raw_scan)
+
+        # Apply missed detection simulation
+        final_scan = self._simulate_missed_detections(noisy_scan)
+
+        return final_scan
+
+    def _add_realistic_noise(self, scan_data):
+        """Add realistic noise to LIDAR data"""
+        # Add Gaussian noise with distance-dependent variance
+        distances = scan_data
+        noise_variance = 0.01 + 0.001 * distances  # Noise increases with distance
+        noise = np.random.normal(0, np.sqrt(noise_variance), distances.shape)
+
+        noisy_distances = distances + noise
+
+        # Ensure non-negative distances
+        return np.maximum(noisy_distances, 0.05)  # Minimum 5cm
+
+    def _simulate_missed_detections(self, scan_data):
+        """Simulate missed detections due to sensor limitations"""
+        # Randomly set some measurements to max range to simulate missed detections
+        mask = np.random.random(scan_data.shape) < self.miss_detection_prob
+        scan_data[mask] = self.lidar.get_max_range()
+
+        return scan_data
+```
+
+## Hands-On Exercise: Creating a Photorealistic Factory Environment
+
+Let's create a complete photorealistic factory environment with GPU-accelerated physics:
+
+```python
+# Complete photorealistic factory environment
+from omni.isaac.core import World
+from omni.isaac.core.robots import Robot
+from omni.isaac.core.utils.stage import add_reference_to_stage
+from omni.isaac.core.utils.prims import create_primitive
+from omni.isaac.core.utils.viewports import set_camera_view
+from omni.isaac.core.utils.nucleus import get_assets_root_path
+from omni.isaac.sensor import Camera
+from omni.isaac.range_sensor import RotatingLidarPhysX
+import numpy as np
+import carb
+
+class PhotorealisticFactoryEnvironment:
+    def __init__(self):
+        # Initialize world with GPU acceleration
+        self.world = World(stage_units_in_meters=1.0)
+
+        # Configure GPU physics and rendering
+        self._configure_gpu_systems()
+
+        # Setup scene
+        self._setup_factory_scene()
+
+        # Setup robot
+        self._setup_inspection_robot()
+
+        # Setup sensors
+        self._setup_inspection_sensors()
+
+        # Setup lighting
+        self._setup_advanced_lighting()
+
+        # Setup materials
+        self._setup_realistic_materials()
+
+    def _configure_gpu_systems(self):
+        """Configure GPU systems for optimal performance"""
+        # Enable GPU physics
+        carb.settings.get_settings().set("/physics/phxgpu/enableGPUDynamics", True)
+        carb.settings.get_settings().set("/physics/phxgpu/bufferCaching", True)
+
+        # Enable RTX rendering
+        carb.settings.get_settings().set("/rtx/sceneDb/enable", True)
+        carb.settings.get_settings().set("/rtx/denoise/enable", True)
+
+        # Enable global illumination
+        carb.settings.get_settings().set("/rtx/indirectDiffuseLighting/enabled", True)
+        carb.settings.get_settings().set("/rtx/indirectSpecularLighting/enabled", True)
+
+    def _setup_factory_scene(self):
+        """Setup factory environment with realistic objects"""
+        # Add ground/floor
+        self.world.scene.add_default_ground_plane()
+
+        # Create factory floor with realistic material
+        floor = create_primitive(
+            prim_path="/World/Floor",
+            primitive_type="Cuboid",
+            primitive_props={
+                "size": [20.0, 20.0, 0.1],
+                "position": [0.0, 0.0, -0.05],
+            },
+            physics_props={"kinematic": True}
+        )
+
+        # Add factory equipment
+        conveyor_belt = create_primitive(
+            prim_path="/World/ConveyorBelt",
+            primitive_type="Cuboid",
+            primitive_props={
+                "size": [8.0, 1.0, 0.2],
+                "position": [0.0, 3.0, 0.1],
+            },
+            physics_props={"kinematic": True}
+        )
+
+        # Add factory objects
+        for i in range(20):
+            x = np.random.uniform(-8, 8)
+            y = np.random.uniform(0, 6)
+            z = 0.2
+
+            # Create various factory objects
+            obj_type = np.random.choice(['box', 'cylinder', 'sphere'])
+
+            if obj_type == 'box':
+                create_primitive(
+                    prim_path=f"/World/FactoryObject_{i}",
+                    primitive_type="Cuboid",
+                    primitive_props={
+                        "size": [0.3, 0.3, 0.3],
+                        "position": [x, y, z],
+                    },
+                    physics_props={
+                        "mass": np.random.uniform(0.5, 2.0),
+                        "restitution": 0.1,
+                        "static_friction": 0.4,
+                        "dynamic_friction": 0.3
+                    }
+                )
+            elif obj_type == 'cylinder':
+                create_primitive(
+                    prim_path=f"/World/FactoryObject_{i}",
+                    primitive_type="Cylinder",
+                    primitive_props={
+                        "radius": 0.15,
+                        "height": 0.4,
+                        "position": [x, y, z+0.2],
+                    },
+                    physics_props={
+                        "mass": np.random.uniform(0.5, 2.0),
+                        "restitution": 0.1,
+                        "static_friction": 0.4,
+                        "dynamic_friction": 0.3
+                    }
+                )
+            else:  # sphere
+                create_primitive(
+                    prim_path=f"/World/FactoryObject_{i}",
+                    primitive_type="Sphere",
+                    primitive_props={
+                        "radius": 0.2,
+                        "position": [x, y, z+0.2],
+                    },
+                    physics_props={
+                        "mass": np.random.uniform(0.5, 1.5),
+                        "restitution": 0.3,
+                        "static_friction": 0.5,
+                        "dynamic_friction": 0.4
+                    }
+                )
+
+    def _setup_inspection_robot(self):
+        """Setup robot for factory inspection"""
+        # For this example, we'll use a simple robot
+        # In practice, you'd import a complex robot USD
+        self.robot = self.world.scene.add(
+            Robot(
+                prim_path="/World/InspectionRobot",
+                name="factory_robot",
+                position=np.array([0.0, 0.0, 0.1]),
+                orientation=np.array([0.0, 0.0, 0.0, 1.0])
+            )
+        )
+
+    def _setup_inspection_sensors(self):
+        """Setup inspection sensors on the robot"""
+        # High-resolution RGB camera
+        self.camera = Camera(
+            prim_path="/World/InspectionRobot/Camera",
+            position=np.array([0.1, 0.0, 0.2]),
+            frequency=30,
+            resolution=(1920, 1080)  # Full HD
+        )
+        self.camera.initialize()
+
+        # 3D LIDAR for environment mapping
+        self.lidar = RotatingLidarPhysX(
+            prim_path="/World/InspectionRobot/Lidar",
+            position=np.array([0.0, 0.0, 0.3]),
+            rotation_rate=10,
+            sensor_period=0.05,
+            horizontal_samples=2160,  # Ultra high resolution
+            vertical_samples=64,
+            horizontal_fov=360,
+            vertical_fov=30,
+            range_threshold=20.0
+        )
+        self.lidar.initialize()
+
+    def _setup_advanced_lighting(self):
+        """Setup realistic factory lighting"""
+        # Create multiple lights for even illumination
+        from omni.kit.commands import Execute
+
+        # Main overhead lights
+        for i in range(4):
+            for j in range(4):
+                x = -7.5 + i * 5
+                y = -7.5 + j * 5
+                z = 8.0
+
+                Execute(
+                    "CreateDistantLightCommand",
+                    prim_path=f"/World/OverheadLight_{i}_{j}",
+                    intensity=800,
+                    color=(0.9, 0.9, 1.0),  # Slightly blue-white
+                    direction=(0, 0, -1)
+                )
+
+        # Accent lighting
+        Execute(
+            "CreateDomeLightCommand",
+            prim_path="/World/AmbientLight",
+            intensity=500,
+            color=(0.8, 0.8, 0.9)
+        )
+
+    def _setup_realistic_materials(self):
+        """Setup realistic materials for the factory"""
+        from omni.isaac.core.materials import VisualizationMaterial
+
+        # Factory floor material (concrete)
+        concrete_material = VisualizationMaterial(
+            prim_path="/World/Looks/Concrete",
+            diffuse_color=np.array([0.6, 0.6, 0.6]),
+            specular_color=np.array([0.2, 0.2, 0.2]),
+            metallic_factor=0.0,
+            roughness_factor=0.7,
+            clearcoat_factor=0.1,
+            clearcoat_roughness_factor=0.5,
+            opacity=1.0
+        )
+        concrete_material.apply(self.world.scene.get_default_ground_plane())
+
+        # Metal materials for equipment
+        metal_material = VisualizationMaterial(
+            prim_path="/World/Looks/Metal",
+            diffuse_color=np.array([0.3, 0.3, 0.3]),
+            specular_color=np.array([0.9, 0.9, 0.9]),
+            metallic_factor=0.9,
+            roughness_factor=0.2,
+            clearcoat_factor=0.3,
+            clearcoat_roughness_factor=0.1,
+            opacity=1.0
+        )
+
+    def run_factory_inspection(self, steps=10000):
+        """Run factory inspection simulation"""
+        self.world.reset()
+
+        for step in range(steps):
+            # Step the simulation
+            self.world.step(render=True)
+
+            # Get sensor data
+            if step % 10 == 0:  # Every 10 steps
+                camera_image = self.camera.get_rgb()
+                lidar_data = self.lidar.get_linear_depth_data()
+
+                # Process inspection data (simplified)
+                min_distance = np.min(lidar_data[np.isfinite(lidar_data)])
+
+                if step % 100 == 0:
+                    print(f"Step {step}: Min obstacle distance = {min_distance:.2f}m")
+                    print(f"  Camera resolution: {camera_image.shape}")
+
+    def cleanup(self):
+        """Clean up the environment"""
+        self.world.clear()
+
+# Usage
+if __name__ == "__main__":
+    factory_env = PhotorealisticFactoryEnvironment()
+    try:
+        factory_env.run_factory_inspection()
+    except KeyboardInterrupt:
+        print("Factory simulation interrupted")
+    finally:
+        factory_env.cleanup()
+```
+
+## Performance Monitoring and Tuning
+
+### GPU Performance Analysis
+
+```python
+# GPU performance monitoring tools
+def monitor_gpu_performance():
+    """Monitor GPU performance during simulation"""
+
+    # Enable performance monitoring
+    carb.settings.get_settings().set("/app/performancedebugger/enabled", True)
+
+    # Set up performance logging
+    performance_config = {
+        "gpu_frame_time": True,
+        "gpu_compute_time": True,
+        "memory_usage": True,
+        "render_pass_times": True
+    }
+
+    # Create performance monitoring function
+    def log_performance_metrics():
+        """Log performance metrics"""
+        import omni.kit.app as app
+
+        # Get timing information
+        timing_service = app.get_app().get_time()
+        frame_time = timing_service.get_frame_time()
+
+        # Log metrics
+        print(f"Frame time: {frame_time:.4f}s")
+        print(f"Target FPS: {1.0/frame_time:.1f}")
+
+    return log_performance_metrics
+
+# Performance optimization checklist
+PERFORMANCE_CHECKLIST = {
+    "physics": {
+        "use_gpu_physics": True,
+        "optimize_collision_meshes": True,
+        "reduce_physics_substeps": True,
+        "batch_similar_objects": True
+    },
+    "rendering": {
+        "enable_texture_streaming": True,
+        "use_lod_system": True,
+        "enable_occlusion_culling": True,
+        "optimize_material_complexity": True
+    },
+    "scene": {
+        "instance_repeated_objects": True,
+        "use_proxy_geometry": True,
+        "optimize_light_count": True,
+        "enable_multi_gpu": True
+    }
+}
+```
+
+## Best Practices
+
+### 1. Resource Management
+- Monitor GPU memory usage and optimize assets accordingly
+- Use level-of-detail (LOD) systems for distant objects
+- Implement texture streaming for large scenes
+
+### 2. Physics Accuracy vs. Performance
+- Balance physics accuracy with real-time performance needs
+- Use simplified collision meshes for performance-critical scenarios
+- Validate simulation results against real-world data
+
+### 3. Rendering Quality
+- Use appropriate lighting models for the use case
+- Implement proper PBR materials for photorealistic results
+- Apply realistic sensor noise models
+
+## Quiz: GPU Physics & Rendering
+
+1. What GPU technology enables real-time ray tracing in Isaac Sim?
+2. How does GPU-accelerated physics differ from CPU-based physics?
+3. What is the purpose of level-of-detail (LOD) systems?
+4. Why is texture streaming important for large scenes?
+
+## Hands-On Challenge
+
+Create a photorealistic warehouse environment with:
+1. Complex lighting system with shadows
+2. Multiple robots with different sensor configurations
+3. Dynamic objects with realistic physics
+4. Performance monitoring and optimization
+
+## Summary
+
+This chapter covered GPU-accelerated physics and rendering in robotics simulation:
+- PhysX engine for GPU-accelerated physics simulation
+- RTX rendering for photorealistic scenes
+- Performance optimization techniques
+- Realistic sensor simulation with GPU acceleration
+
+## Further Reading
+
+- NVIDIA PhysX Documentation
+- RTX Rendering Guide
+- USD Advanced Features
+- GPU Optimization Techniques for Simulation
+
+## Next Chapter Preview
+
+Chapter 15 will explore domain randomization techniques that help create robust AI models by varying environmental conditions, lighting, textures, and physics parameters during training.

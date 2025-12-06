@@ -1,0 +1,1157 @@
+---
+sidebar_position: 25
+title: "Chapter 25: Transformer Architecture for Robotics"
+description: "Explore transformer architecture applied to robotics, including vision encoders, language models, and attention mechanisms used in Vision-Language-Action systems for robot control."
+tags: [transformers, vision-encoder, language-model, attention-mechanism, robotics, ai, multimodal]
+tier: A
+prerequisites: ["Module 1: ROS 2 Fundamentals", "Module 2: Digital Twins", "Module 3: Navigation Concepts", "Chapter 24: VLA Paradigm"]
+learning_outcomes: ["Understand transformer architecture for robotics applications", "Implement vision encoders for robotic perception", "Integrate language models with robotic control", "Apply attention mechanisms to robot action generation"]
+---
+
+# Chapter 25: Transformer Architecture for Robotics
+
+## Introduction
+
+Transformer architecture has revolutionized artificial intelligence, particularly in natural language processing, and has now extended its influence into robotics. The self-attention mechanism at the heart of transformers enables models to process sequential data while maintaining contextual relationships, making them ideal for robotics applications where spatial and temporal relationships matter. This chapter explores how transformer architectures are adapted for robotic applications, particularly in Vision-Language-Action (VLA) systems.
+
+We'll examine the components of transformer-based robotic systems: vision encoders that process camera imagery, language models that interpret natural language commands, and attention mechanisms that correlate visual and linguistic information to generate robot actions. Understanding these components is crucial for implementing effective VLA systems.
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+- Explain transformer architecture and its adaptation for robotics
+- Implement vision encoders for robotic perception using transformer models
+- Integrate language models with robotic control systems
+- Apply attention mechanisms to correlate vision and language for action generation
+- Evaluate transformer-based robotic systems for performance and safety
+
+## Prerequisites
+
+Before starting this chapter, ensure you have:
+- Completed Module 1 (ROS 2 fundamentals, message passing)
+- Module 2 (digital twins, simulation concepts)
+- Module 3 (navigation concepts, Nav2 integration)
+- Chapter 24 (VLA paradigm and concepts)
+- Basic understanding of neural networks and attention mechanisms
+- Experience with ROS 2 action servers and service calls
+
+## Real-World Analogy: The Attentive Chef
+
+Think of transformer architecture in robotics like a skilled chef who simultaneously processes multiple streams of information. The chef observes ingredients (vision), listens to orders (language), and correlates this information to execute cooking actions. The attention mechanism works like the chef's ability to focus on relevant information while filtering out distractions - focusing on the order when hearing it, paying attention to specific ingredients when needed, and correlating visual and linguistic cues to produce the desired outcome. Transformers enable robots to perform similar multitasking with attention to relevant information.
+
+## Core Concepts
+
+### 1. Self-Attention Mechanism
+
+The core of transformer architecture is the self-attention mechanism that allows the model to weigh the importance of different parts of the input when generating each part of the output:
+
+- **Query, Key, Value**: Q = XW_Q, K = XW_K, V = XW_V
+- **Attention Scores**: Attention(Q, K, V) = softmax(QK^T / √d_k)V
+- **Multi-head Attention**: Multiple attention heads operating in parallel
+
+### 2. Vision Encoders in Robotics
+
+Vision encoders process camera imagery for robotic applications:
+- **Convolutional layers**: Extract low-level features
+- **Transformer blocks**: Process high-level relationships
+- **Positional encoding**: Preserve spatial relationships
+- **Downsampling**: Reduce computational complexity
+
+### 3. Language Models for Robot Commands
+
+Language models interpret natural language for robot control:
+- **Tokenization**: Convert text to numerical sequences
+- **Embedding**: Map tokens to high-dimensional vectors
+- **Contextual understanding**: Maintain command context
+- **Intent recognition**: Identify robot action intentions
+
+### 4. Cross-Modal Attention
+
+Cross-modal attention connects vision and language:
+- **Vision-Language Attention**: Correlate visual features with language tokens
+- **Multimodal Fusion**: Combine vision and language embeddings
+- **Action Generation**: Map multimodal representations to robot actions
+
+## Transformer Architecture for Robotics Implementation
+
+### Vision Transformer for Robotic Perception
+
+```python
+#!/usr/bin/env python3
+
+"""
+Vision Transformer for Robotic Perception
+Implementation of ViT adapted for robotic vision tasks
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+from cv_bridge import CvBridge
+import torch
+import torch.nn as nn
+import numpy as np
+from typing import List, Tuple, Optional
+
+
+class VisionTransformerBlock(nn.Module):
+    """Single transformer block for vision processing"""
+
+    def __init__(self, embed_dim: int, num_heads: int, mlp_ratio: float = 4.0):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.norm2 = nn.LayerNorm(embed_dim)
+
+        # MLP with GeLU activation
+        mlp_hidden_dim = int(embed_dim * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, mlp_hidden_dim),
+            nn.GELU(),
+            nn.Linear(mlp_hidden_dim, embed_dim),
+        )
+
+    def forward(self, x):
+        # Self-attention with residual connection
+        attn_out, _ = self.attn(self.norm1(x), self.norm1(x), self.norm1(x))
+        x = x + attn_out
+
+        # Feed-forward with residual connection
+        x = x + self.mlp(self.norm2(x))
+
+        return x
+
+
+class VisionTransformer(nn.Module):
+    """Vision Transformer adapted for robotic perception"""
+
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 16,
+        in_channels: int = 3,
+        embed_dim: int = 768,
+        depth: int = 12,
+        num_heads: int = 12,
+        num_classes: int = 1000
+    ):
+        super().__init__()
+
+        # Calculate number of patches
+        self.num_patches = (img_size // patch_size) ** 2
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+
+        # Patch embedding layer
+        self.patch_embed = nn.Conv2d(
+            in_channels, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
+
+        # Class token and positional embedding
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, self.num_patches + 1, embed_dim)
+        )
+
+        # Dropout
+        self.pos_drop = nn.Dropout(p=0.1)
+
+        # Transformer blocks
+        self.blocks = nn.Sequential(*[
+            VisionTransformerBlock(embed_dim, num_heads)
+            for _ in range(depth)
+        ])
+
+        # Normalization
+        self.norm = nn.LayerNorm(embed_dim)
+
+        # Classifier head
+        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+        # Initialize positional embeddings
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize weights"""
+        torch.nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        torch.nn.init.trunc_normal_(self.cls_token, std=0.02)
+
+    def forward_features(self, x):
+        """Forward pass through feature extractor"""
+        B, C, H, W = x.shape
+
+        # Convert image to patches and embed
+        x = self.patch_embed(x)  # [B, embed_dim, H//patch_size, W//patch_size]
+        x = x.flatten(2).transpose(1, 2)  # [B, num_patches, embed_dim]
+
+        # Add class token
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)  # [B, num_patches + 1, embed_dim]
+
+        # Add positional embeddings
+        x = x + self.pos_embed
+        x = self.pos_drop(x)
+
+        # Pass through transformer blocks
+        x = self.blocks(x)
+
+        # Normalize
+        x = self.norm(x)
+
+        return x[:, 0]  # Return class token representation
+
+    def forward(self, x):
+        """Forward pass"""
+        x = self.forward_features(x)
+        x = self.head(x)
+        return x
+
+
+class VisionTransformerNode(Node):
+    """ROS 2 node for Vision Transformer processing"""
+
+    def __init__(self):
+        super().__init__('vision_transformer_node')
+
+        # CV Bridge for image processing
+        self.bridge = CvBridge()
+
+        # Subscribers
+        self.image_sub = self.create_subscription(
+            Image, 'camera/image_raw', self.image_callback, 10
+        )
+
+        # Publishers
+        self.perception_pub = self.create_publisher(String, 'robot/perception', 10)
+
+        # Initialize Vision Transformer
+        self.vit_model = VisionTransformer(
+            img_size=224,
+            patch_size=16,
+            in_channels=3,
+            embed_dim=768,
+            depth=12,
+            num_heads=12,
+            num_classes=1000  # For pre-trained weights, adjust as needed
+        )
+
+        # Load pre-trained weights (in practice, you'd load from checkpoint)
+        # For this example, we'll initialize randomly
+        self.get_logger().info('Vision Transformer initialized')
+
+    def image_callback(self, msg):
+        """Handle incoming camera images"""
+        try:
+            # Convert ROS Image to OpenCV
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+
+            # Preprocess image (resize, normalize, etc.)
+            processed_image = self.preprocess_image(cv_image)
+
+            # Run Vision Transformer
+            with torch.no_grad():
+                features = self.vit_model(processed_image)
+
+            # Process features for robot perception
+            perception_result = self.process_features_for_robot(features)
+
+            # Publish perception result
+            result_msg = String()
+            result_msg.data = perception_result
+            self.perception_pub.publish(result_msg)
+
+            self.get_logger().info(f'Processed image, perception: {perception_result[:50]}...')
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing image: {e}')
+
+    def preprocess_image(self, cv_image):
+        """Preprocess image for Vision Transformer"""
+        import cv2
+
+        # Resize image to model input size
+        resized = cv2.resize(cv_image, (224, 224))
+
+        # Convert to tensor and normalize
+        normalized = resized.astype(np.float32) / 255.0
+        normalized = (normalized - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]  # ImageNet normalization
+
+        # Add batch dimension and channel-first format
+        tensor = torch.from_numpy(normalized).permute(2, 0, 1).unsqueeze(0)
+
+        return tensor
+
+    def process_features_for_robot(self, features):
+        """Process transformer features for robotic perception"""
+        # In a real implementation, this would decode features to meaningful
+        # robotic perceptions like object detection, affordances, etc.
+
+        # For demonstration, return a mock perception string
+        feature_vector = features.cpu().numpy()[0]
+
+        # Simple example: classify based on dominant feature
+        max_idx = np.argmax(feature_vector)
+        confidence = float(np.max(feature_vector))
+
+        perception = f"Object detected: class_{max_idx}, confidence: {confidence:.3f}"
+
+        return perception
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    vit_node = VisionTransformerNode()
+
+    try:
+        rclpy.spin(vit_node)
+    except KeyboardInterrupt:
+        vit_node.get_logger().info('Shutting down Vision Transformer node')
+    finally:
+        vit_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Language Model for Robot Commands
+
+```python
+#!/usr/bin/env python3
+
+"""
+Language Model for Robot Commands
+Implementation of language model adapted for robotic command interpretation
+"""
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import PoseStamped
+import torch
+import torch.nn as nn
+import numpy as np
+from typing import List, Dict, Optional
+
+
+class LanguageTransformerBlock(nn.Module):
+    """Single transformer block for language processing"""
+
+    def __init__(self, embed_dim: int, num_heads: int, mlp_ratio: float = 4.0):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.norm2 = nn.LayerNorm(embed_dim)
+
+        # MLP with GeLU activation
+        mlp_hidden_dim = int(embed_dim * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, mlp_hidden_dim),
+            nn.GELU(),
+            nn.Linear(mlp_hidden_dim, embed_dim),
+        )
+
+    def forward(self, x):
+        # Self-attention with residual connection
+        attn_out, _ = self.attn(self.norm1(x), self.norm1(x), self.norm1(x))
+        x = x + attn_out
+
+        # Feed-forward with residual connection
+        x = x + self.mlp(self.norm2(x))
+
+        return x
+
+
+class LanguageTransformer(nn.Module):
+    """Language Transformer for robotic command interpretation"""
+
+    def __init__(
+        self,
+        vocab_size: int = 50257,  # GPT-2 vocab size
+        max_seq_len: int = 1024,
+        embed_dim: int = 768,
+        depth: int = 12,
+        num_heads: int = 12
+    ):
+        super().__init__()
+
+        self.vocab_size = vocab_size
+        self.max_seq_len = max_seq_len
+        self.embed_dim = embed_dim
+
+        # Token and positional embeddings
+        self.token_embed = nn.Embedding(vocab_size, embed_dim)
+        self.pos_embed = nn.Embedding(max_seq_len, embed_dim)
+
+        # Dropout
+        self.dropout = nn.Dropout(p=0.1)
+
+        # Transformer blocks
+        self.blocks = nn.Sequential(*[
+            LanguageTransformerBlock(embed_dim, num_heads)
+            for _ in range(depth)
+        ])
+
+        # Normalization
+        self.norm = nn.LayerNorm(embed_dim)
+
+        # Output projection to action space
+        self.action_head = nn.Linear(embed_dim, 7)  # 7-DOF action space
+
+        # Initialize weights
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize weights"""
+        # Initialize embedding layers
+        nn.init.normal_(self.token_embed.weight, std=0.02)
+        nn.init.normal_(self.pos_embed.weight, std=0.02)
+
+    def forward(self, token_ids):
+        """Forward pass"""
+        B, T = token_ids.shape
+
+        # Embed tokens
+        token_embeddings = self.token_embed(token_ids)  # [B, T, embed_dim]
+
+        # Add positional embeddings
+        pos_ids = torch.arange(T, device=token_ids.device).unsqueeze(0)  # [1, T]
+        pos_embeddings = self.pos_embed(pos_ids)  # [1, T, embed_dim]
+        x = token_embeddings + pos_embeddings
+
+        # Apply dropout
+        x = self.dropout(x)
+
+        # Pass through transformer blocks
+        x = self.blocks(x)
+
+        # Normalize
+        x = self.norm(x)
+
+        # Take the representation of the last token for action generation
+        last_token_repr = x[:, -1, :]  # [B, embed_dim]
+
+        # Generate action
+        action = self.action_head(last_token_repr)  # [B, 7]
+
+        return action
+
+
+class LanguageModelNode(Node):
+    """ROS 2 node for Language Model processing"""
+
+    def __init__(self):
+        super().__init__('language_model_node')
+
+        # Subscribers
+        self.command_sub = self.create_subscription(
+            String, 'robot/command', self.command_callback, 10
+        )
+
+        # Publishers
+        self.interpretation_pub = self.create_publisher(String, 'robot/command_interpretation', 10)
+        self.action_pub = self.create_publisher(PoseStamped, 'robot/action_command', 10)
+
+        # Initialize Language Model
+        self.lang_model = LanguageTransformer(
+            vocab_size=50257,
+            max_seq_len=1024,
+            embed_dim=768,
+            depth=12,
+            num_heads=12
+        )
+
+        # Simple tokenizer (in practice, use a proper tokenizer like GPT-2's)
+        self.tokenizer = self.create_simple_tokenizer()
+
+        self.get_logger().info('Language Model initialized')
+
+    def create_simple_tokenizer(self):
+        """Create a simple tokenizer for demonstration"""
+        # In practice, you'd use a proper tokenizer like GPT-2's
+        # This is a mock implementation
+
+        # Vocabulary for robot commands
+        vocab = {
+            '<pad>': 0, '<unk>': 1, '<start>': 2, '<end>': 3,
+            'move': 4, 'go': 5, 'to': 6, 'the': 7, 'and': 8,
+            'pick': 9, 'up': 10, 'place': 11, 'down': 12,
+            'left': 13, 'right': 14, 'forward': 15, 'backward': 16,
+            'kitchen': 17, 'bedroom': 18, 'living': 19, 'room': 20,
+            'table': 21, 'chair': 22, 'cup': 23, 'bottle': 24,
+            'red': 25, 'blue': 26, 'green': 27, 'object': 28,
+            'please': 29, 'thank': 30, 'you': 31
+        }
+
+        # Reverse mapping
+        inv_vocab = {v: k for k, v in vocab.items()}
+
+        return {'vocab': vocab, 'inv_vocab': inv_vocab}
+
+    def command_callback(self, msg):
+        """Handle incoming robot commands"""
+        try:
+            command_text = msg.data
+
+            # Tokenize command
+            token_ids = self.tokenize_command(command_text)
+
+            # Process with language model
+            with torch.no_grad():
+                action_tensor = self.lang_model(token_ids)
+
+            # Interpret command and generate action
+            interpretation = self.interpret_command(command_text, action_tensor)
+
+            # Publish interpretation
+            interp_msg = String()
+            interp_msg.data = interpretation
+            self.interpretation_pub.publish(interp_msg)
+
+            # Publish action command
+            action_msg = PoseStamped()
+            action_msg.header.stamp = self.get_clock().now().to_msg()
+            action_msg.header.frame_id = 'base_link'
+
+            # Convert action tensor to pose (simplified mapping)
+            action_values = action_tensor[0].cpu().numpy()
+            action_msg.pose.position.x = float(action_values[0])
+            action_msg.pose.position.y = float(action_values[1])
+            action_msg.pose.position.z = float(action_values[2])
+            action_msg.pose.orientation.w = 1.0  # Simplified
+
+            self.action_pub.publish(action_msg)
+
+            self.get_logger().info(f'Interpreted command: {command_text[:50]}... -> {interpretation[:50]}...')
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing command: {e}')
+
+    def tokenize_command(self, command: str):
+        """Tokenize command string"""
+        # Split command into tokens
+        tokens = command.lower().split()
+
+        # Add start and end tokens
+        tokens = ['<start>'] + tokens + ['<end>']
+
+        # Convert to token IDs
+        token_ids = []
+        for token in tokens:
+            token_id = self.tokenizer['vocab'].get(token, self.tokenizer['vocab']['<unk>'])
+            token_ids.append(token_id)
+
+        # Pad or truncate to max length
+        max_len = 64  # Adjust as needed
+        if len(token_ids) < max_len:
+            token_ids.extend([self.tokenizer['vocab']['<pad>']] * (max_len - len(token_ids)))
+        else:
+            token_ids = token_ids[:max_len]
+
+        # Convert to tensor
+        tensor = torch.tensor([token_ids], dtype=torch.long)
+
+        return tensor
+
+    def interpret_command(self, command: str, action_tensor):
+        """Interpret command and action for logging"""
+        # In a real implementation, this would map the action tensor
+        # to meaningful robot actions based on the command
+
+        action_values = action_tensor[0].cpu().numpy()
+
+        interpretation = f"Command '{command}' interpreted as action: [{action_values[:3]}...]"
+
+        return interpretation
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    lang_node = LanguageModelNode()
+
+    try:
+        rclpy.spin(lang_node)
+    except KeyboardInterrupt:
+        lang_node.get_logger().info('Shutting down Language Model node')
+    finally:
+        lang_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Cross-Modal Attention for Vision-Language Integration
+
+```python
+#!/usr/bin/env python3
+
+"""
+Cross-Modal Attention for Vision-Language Integration
+Implementation of attention mechanism connecting vision and language for robot control
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from cv_bridge import CvBridge
+import torch
+import torch.nn as nn
+import numpy as np
+from typing import List, Tuple, Optional
+
+
+class CrossModalAttention(nn.Module):
+    """Cross-modal attention between vision and language"""
+
+    def __init__(self, embed_dim: int, num_heads: int):
+        super().__init__()
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        # Linear projections for vision and language
+        self.vision_query = nn.Linear(embed_dim, embed_dim)
+        self.vision_key = nn.Linear(embed_dim, embed_dim)
+        self.vision_value = nn.Linear(embed_dim, embed_dim)
+
+        self.lang_query = nn.Linear(embed_dim, embed_dim)
+        self.lang_key = nn.Linear(embed_dim, embed_dim)
+        self.lang_value = nn.Linear(embed_dim, embed_dim)
+
+        # Output projections
+        self.vision_output = nn.Linear(embed_dim, embed_dim)
+        self.lang_output = nn.Linear(embed_dim, embed_dim)
+
+        # Layer norms
+        self.vision_norm = nn.LayerNorm(embed_dim)
+        self.lang_norm = nn.LayerNorm(embed_dim)
+
+        # Dropout
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, vision_features, lang_features):
+        """
+        Forward pass with cross-modal attention
+        vision_features: [batch, vision_seq_len, embed_dim]
+        lang_features: [batch, lang_seq_len, embed_dim]
+        """
+        B, V_seq, D = vision_features.shape
+        B, L_seq, D = lang_features.shape
+
+        # Vision attending to language
+        v_q = self.vision_query(vision_features).view(B, V_seq, self.num_heads, self.head_dim).transpose(1, 2)
+        l_k = self.lang_key(lang_features).view(B, L_seq, self.num_heads, self.head_dim).transpose(1, 2)
+        l_v = self.lang_value(lang_features).view(B, L_seq, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Attention scores: vision queries attend to language keys/values
+        v_scores = torch.matmul(v_q, l_k.transpose(-2, -1)) / (self.head_dim ** 0.5)
+        v_attention = torch.softmax(v_scores, dim=-1)
+        v_context = torch.matmul(v_attention, l_v).transpose(1, 2).contiguous().view(B, V_seq, D)
+
+        # Language attending to vision
+        l_q = self.lang_query(lang_features).view(B, L_seq, self.num_heads, self.head_dim).transpose(1, 2)
+        v_k = self.vision_key(vision_features).view(B, V_seq, self.num_heads, self.head_dim).transpose(1, 2)
+        v_v = self.vision_value(vision_features).view(B, V_seq, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Attention scores: language queries attend to vision keys/values
+        l_scores = torch.matmul(l_q, v_k.transpose(-2, -1)) / (self.head_dim ** 0.5)
+        l_attention = torch.softmax(l_scores, dim=-1)
+        l_context = torch.matmul(l_attention, v_v).transpose(1, 2).contiguous().view(B, L_seq, D)
+
+        # Apply output projections
+        v_output = self.vision_output(v_context)
+        l_output = self.lang_output(l_context)
+
+        # Residual connections and layer norms
+        v_final = self.vision_norm(vision_features + self.dropout(v_output))
+        l_final = self.lang_norm(lang_features + self.dropout(l_output))
+
+        return v_final, l_final
+
+
+class VisionLanguageFusion(nn.Module):
+    """Fusion module for vision-language integration"""
+
+    def __init__(self, embed_dim: int = 768, num_heads: int = 12, fusion_layers: int = 4):
+        super().__init__()
+
+        self.cross_attention_layers = nn.ModuleList([
+            CrossModalAttention(embed_dim, num_heads)
+            for _ in range(fusion_layers)
+        ])
+
+        # Final fusion layer to combine vision and language
+        self.fusion_proj = nn.Linear(embed_dim * 2, embed_dim)
+        self.action_head = nn.Linear(embed_dim, 7)  # 7-DOF action space
+
+    def forward(self, vision_features, lang_features):
+        """Fuse vision and language features"""
+        # Apply cross-modal attention layers
+        v_feat, l_feat = vision_features, lang_features
+
+        for layer in self.cross_attention_layers:
+            v_feat, l_feat = layer(v_feat, l_feat)
+
+        # Pool features (take mean of sequence dimension)
+        v_pooled = torch.mean(v_feat, dim=1)  # [B, embed_dim]
+        l_pooled = torch.mean(l_feat, dim=1)  # [B, embed_dim]
+
+        # Concatenate and project
+        combined = torch.cat([v_pooled, l_pooled], dim=-1)  # [B, 2*embed_dim]
+        fused = self.fusion_proj(combined)  # [B, embed_dim]
+
+        # Generate action
+        action = self.action_head(fused)  # [B, 7]
+
+        return action
+
+
+class VisionLanguageIntegrationNode(Node):
+    """ROS 2 node for Vision-Language Integration"""
+
+    def __init__(self):
+        super().__init__('vision_language_integration_node')
+
+        # CV Bridge for image processing
+        self.bridge = CvBridge()
+
+        # Subscribers
+        self.image_sub = self.create_subscription(
+            Image, 'camera/image_raw', self.image_callback, 10
+        )
+        self.command_sub = self.create_subscription(
+            String, 'robot/command', self.command_callback, 10
+        )
+
+        # Publishers
+        self.action_pub = self.create_publisher(Twist, 'robot/fused_action', 10)
+        self.status_pub = self.create_publisher(String, 'robot/vl_status', 10)
+
+        # Initialize fusion model
+        self.fusion_model = VisionLanguageFusion(
+            embed_dim=768,
+            num_heads=12,
+            fusion_layers=4
+        )
+
+        # Store latest features
+        self.latest_vision_features = None
+        self.latest_lang_features = None
+
+        # Simple language encoder (mock implementation)
+        self.lang_encoder = self.create_mock_lang_encoder()
+
+        self.get_logger().info('Vision-Language Integration initialized')
+
+    def create_mock_lang_encoder(self):
+        """Create a mock language encoder for demonstration"""
+        # In practice, you'd use a pre-trained language model
+        # This is a simplified mock implementation
+
+        # Vocabulary for robot commands
+        vocab = {
+            '<pad>': 0, '<unk>': 1, '<start>': 2, '<end>': 3,
+            'move': 4, 'go': 5, 'to': 6, 'the': 7, 'and': 8,
+            'pick': 9, 'up': 10, 'place': 11, 'down': 12,
+            'left': 13, 'right': 14, 'forward': 15, 'backward': 16,
+            'kitchen': 17, 'bedroom': 18, 'living': 19, 'room': 20,
+            'table': 21, 'chair': 22, 'cup': 23, 'bottle': 24,
+            'red': 25, 'blue': 26, 'green': 27, 'object': 28,
+            'please': 29, 'thank': 30, 'you': 31
+        }
+
+        # Create embedding matrix
+        embed_dim = 768
+        vocab_size = len(vocab)
+        embedding_matrix = torch.randn(vocab_size, embed_dim) * 0.02
+
+        return {
+            'vocab': vocab,
+            'embedding': embedding_matrix
+        }
+
+    def image_callback(self, msg):
+        """Handle incoming camera images"""
+        try:
+            # Convert ROS Image to OpenCV
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+
+            # In a real implementation, you'd run a vision model
+            # For this example, we'll simulate vision features
+            vision_features = self.simulate_vision_features(cv_image)
+
+            self.latest_vision_features = vision_features
+
+            # Process if we have both vision and language
+            self.process_fusion_if_ready()
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing image: {e}')
+
+    def command_callback(self, msg):
+        """Handle incoming robot commands"""
+        try:
+            command_text = msg.data
+
+            # Encode command to features
+            lang_features = self.encode_command_features(command_text)
+
+            self.latest_lang_features = lang_features
+
+            # Process if we have both vision and language
+            self.process_fusion_if_ready()
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing command: {e}')
+
+    def simulate_vision_features(self, cv_image):
+        """Simulate vision features from image (in practice, run ViT)"""
+        # In a real implementation, you'd run a Vision Transformer
+        # For simulation, create mock features based on image content
+
+        # Simple mock: create features based on image statistics
+        img_mean = np.mean(cv_image, axis=(0, 1))  # Mean color per channel
+        img_std = np.std(cv_image, axis=(0, 1))    # Std per channel
+
+        # Create a mock feature vector
+        mock_features = np.concatenate([img_mean, img_std])
+        mock_features = np.tile(mock_features, 128)[:768]  # Extend to 768-dim
+
+        # Convert to tensor
+        features_tensor = torch.tensor(mock_features, dtype=torch.float32).unsqueeze(0)  # [1, 768]
+
+        return features_tensor
+
+    def encode_command_features(self, command: str):
+        """Encode command to feature vector"""
+        # Tokenize command
+        tokens = command.lower().split()
+        tokens = ['<start>'] + tokens + ['<end>']
+
+        # Convert to token IDs
+        token_ids = []
+        for token in tokens:
+            token_id = self.lang_encoder['vocab'].get(token, self.lang_encoder['vocab']['<unk>'])
+            token_ids.append(token_id)
+
+        # Limit sequence length
+        token_ids = token_ids[:32]  # Max 32 tokens
+
+        # Get embeddings
+        embeddings = self.lang_encoder['embedding'][token_ids]  # [seq_len, embed_dim]
+
+        # Average pool to get single feature vector
+        pooled_features = torch.mean(embeddings, dim=0, keepdim=True)  # [1, embed_dim]
+
+        return pooled_features
+
+    def process_fusion_if_ready(self):
+        """Process fusion when both vision and language features are available"""
+        if self.latest_vision_features is None or self.latest_lang_features is None:
+            return
+
+        try:
+            # Run vision-language fusion
+            with torch.no_grad():
+                action_tensor = self.fusion_model(
+                    self.latest_vision_features,
+                    self.latest_lang_features
+                )
+
+            # Convert action to Twist message
+            action_values = action_tensor[0].cpu().numpy()
+
+            twist_msg = Twist()
+            twist_msg.linear.x = float(action_values[0])
+            twist_msg.linear.y = float(action_values[1])
+            twist_msg.linear.z = float(action_values[2])
+            twist_msg.angular.x = float(action_values[3])
+            twist_msg.angular.y = float(action_values[4])
+            twist_msg.angular.z = float(action_values[5])
+
+            # Publish action
+            self.action_pub.publish(twist_msg)
+
+            # Publish status
+            status_msg = String()
+            status_msg.data = f'Fused vision-language: action generated'
+            self.status_pub.publish(status_msg)
+
+            self.get_logger().info(f'Generated fused action: [{action_values[:3]}...]')
+
+            # Clear processed features
+            self.latest_vision_features = None
+            self.latest_lang_features = None
+
+        except Exception as e:
+            self.get_logger().error(f'Error in vision-language fusion: {e}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    vl_node = VisionLanguageIntegrationNode()
+
+    try:
+        rclpy.spin(vl_node)
+    except KeyboardInterrupt:
+        vl_node.get_logger().info('Shutting down Vision-Language Integration node')
+    finally:
+        vl_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Transformer Training for Robotics
+
+### Transformer Training Node
+
+```python
+#!/usr/bin/env python3
+
+"""
+Transformer Training Node
+Training pipeline for transformer models in robotics
+"""
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Float64
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+from typing import List, Dict, Optional
+
+
+class RobotTrajectoryDataset(Dataset):
+    """Dataset for robot trajectory training"""
+
+    def __init__(self, demonstrations: List[Dict]):
+        self.demonstrations = demonstrations
+
+    def __len__(self):
+        return len(self.demonstrations)
+
+    def __getitem__(self, idx):
+        demo = self.demonstrations[idx]
+
+        # Convert to tensors
+        vision_features = torch.tensor(demo['vision_features'], dtype=torch.float32)
+        lang_features = torch.tensor(demo['lang_features'], dtype=torch.float32)
+        actions = torch.tensor(demo['actions'], dtype=torch.float32)
+
+        return {
+            'vision': vision_features,
+            'language': lang_features,
+            'actions': actions
+        }
+
+
+class TransformerTrainerNode(Node):
+    """ROS 2 node for transformer training"""
+
+    def __init__(self):
+        super().__init__('transformer_trainer_node')
+
+        # Publishers for training metrics
+        self.loss_pub = self.create_publisher(Float64, 'training/loss', 10)
+        self.accuracy_pub = self.create_publisher(Float64, 'training/accuracy', 10)
+        self.status_pub = self.create_publisher(String, 'training/status', 10)
+
+        # Initialize model
+        self.model = VisionLanguageFusion(
+            embed_dim=768,
+            num_heads=12,
+            fusion_layers=4
+        )
+
+        # Initialize optimizer and loss
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-4)
+        self.criterion = nn.MSELoss()
+
+        # Training parameters
+        self.batch_size = 8
+        self.epochs = 100
+        self.current_epoch = 0
+
+        # Mock dataset (in practice, you'd load real demonstration data)
+        self.dataset = self.create_mock_dataset()
+        self.dataloader = DataLoader(
+            self.dataset,
+            batch_size=self.batch_size,
+            shuffle=True
+        )
+
+        # Training timer
+        self.train_timer = self.create_timer(1.0, self.train_step)
+
+        self.get_logger().info('Transformer Trainer initialized')
+
+    def create_mock_dataset(self):
+        """Create mock dataset for demonstration"""
+        # In practice, you'd load real demonstration data
+        # This creates mock data for illustration
+
+        demonstrations = []
+
+        for i in range(100):  # 100 mock demonstrations
+            demo = {
+                'vision_features': np.random.randn(50, 768).astype(np.float32),  # 50 vision patches
+                'lang_features': np.random.randn(10, 768).astype(np.float32),   # 10 language tokens
+                'actions': np.random.randn(7).astype(np.float32)  # 7-DOF action
+            }
+            demonstrations.append(demo)
+
+        return RobotTrajectoryDataset(demonstrations)
+
+    def train_step(self):
+        """Perform one training step"""
+        if self.current_epoch >= self.epochs:
+            self.get_logger().info('Training completed')
+            return
+
+        try:
+            total_loss = 0.0
+            total_batches = 0
+
+            for batch_idx, batch in enumerate(self.dataloader):
+                if batch_idx >= 5:  # Limit batches per epoch for demo
+                    break
+
+                # Get batch data
+                vision_batch = batch['vision']
+                lang_batch = batch['language']
+                actions_batch = batch['actions']
+
+                # Forward pass
+                self.optimizer.zero_grad()
+
+                # In practice, you'd run the full model
+                # For this demo, we'll simulate the forward pass
+                batch_size = vision_batch.size(0)
+
+                # Simulate action prediction (in practice, run the model)
+                predicted_actions = torch.randn(batch_size, 7) * 0.1  # Small random values
+
+                # Calculate loss
+                loss = self.criterion(predicted_actions, actions_batch)
+
+                # Backward pass
+                loss.backward()
+                self.optimizer.step()
+
+                total_loss += loss.item()
+                total_batches += 1
+
+            # Calculate average loss
+            avg_loss = total_loss / total_batches if total_batches > 0 else 0.0
+
+            # Publish metrics
+            loss_msg = Float64()
+            loss_msg.data = avg_loss
+            self.loss_pub.publish(loss_msg)
+
+            # Mock accuracy (in practice, calculate based on task success)
+            accuracy_msg = Float64()
+            accuracy_msg.data = max(0.0, 1.0 - avg_loss)  # Simple mock accuracy
+            self.accuracy_pub.publish(accuracy_msg)
+
+            # Publish status
+            status_msg = String()
+            status_msg.data = f'Epoch {self.current_epoch}, Loss: {avg_loss:.4f}'
+            self.status_pub.publish(status_msg)
+
+            self.get_logger().info(f'Training - Epoch {self.current_epoch}, Loss: {avg_loss:.4f}')
+
+            self.current_epoch += 1
+
+        except Exception as e:
+            self.get_logger().error(f'Error in training step: {e}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    trainer_node = TransformerTrainerNode()
+
+    try:
+        rclpy.spin(trainer_node)
+    except KeyboardInterrupt:
+        trainer_node.get_logger().info('Shutting down Transformer Trainer')
+    finally:
+        trainer_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Key Considerations for Transformer Robotics
+
+### 1. Computational Efficiency
+
+- **Model compression**: Techniques like quantization and pruning for edge deployment
+- **Efficient attention**: Sparse attention mechanisms to reduce computational complexity
+- **Knowledge distillation**: Smaller student models that retain teacher performance
+
+### 2. Safety and Robustness
+
+- **Uncertainty quantification**: Understanding when the model is uncertain
+- **Adversarial robustness**: Defending against adversarial inputs
+- **Fail-safe mechanisms**: Default behaviors when model confidence is low
+
+### 3. Data Efficiency
+
+- **Few-shot learning**: Training with limited demonstration data
+- **Sim-to-real transfer**: Leveraging simulation data for real-world tasks
+- **Data augmentation**: Techniques to increase dataset diversity
+
+## Quiz: Transformer Architecture for Robotics
+
+1. What is the core mechanism in transformer architecture?
+2. Name two components of the self-attention mechanism.
+3. What does ViT stand for in computer vision?
+4. What is cross-modal attention?
+5. Name two challenges in deploying transformer models on robots.
+
+## Hands-On Challenge
+
+Implement a complete vision-language fusion system that:
+1. Processes camera images through a vision transformer
+2. Interprets natural language commands with a language model
+3. Combines vision and language with cross-modal attention
+4. Generates robot actions based on the fused representation
+5. Evaluates system performance and safety
+
+## Summary
+
+This chapter explored transformer architecture applied to robotics, including vision encoders, language models, and attention mechanisms used in Vision-Language-Action systems. We implemented Vision Transformers for robotic perception, language models for command interpretation, and cross-modal attention for vision-language integration. Transformers enable robots to process complex multimodal inputs and generate appropriate actions, but require careful consideration of computational efficiency, safety, and data requirements.
+
+## Further Reading
+
+- "Attention Is All You Need" - Original transformer paper
+- "An Image is Worth 16x16 Words" - Vision Transformer introduction
+- "Language Models are Few-Shot Learners" - GPT-3 capabilities
+- "RT-1: Robotics Transformer for Real-World Control"
+- "CLIP: Learning Transferable Visual Models"
+
+## Next Chapter Preview
+
+Chapter 26 will dive deep into specific VLA models including OpenVLA and RT-2, exploring their architectures, training methodologies, and practical deployment considerations.

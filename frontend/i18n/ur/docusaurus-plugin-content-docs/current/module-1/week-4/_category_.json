@@ -1,0 +1,8 @@
+{
+  "label": "ہفتہ 4: URDF روبوٹ ماڈلز (Week 4: URDF Robot Models)",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn about URDF robot modeling and coordinate frame management for robotics applications."
+  }
+}

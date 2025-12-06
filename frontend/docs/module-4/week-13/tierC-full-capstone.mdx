@@ -1,0 +1,1109 @@
+---
+title: "Tier C Extension: Full Capstone Physical Deployment"
+chapter_number: "4.1C"
+module: 4
+sidebar_position: 3
+description: "Complete physical deployment of the voice-controlled navigation capstone project on Unitree humanoid robots with full safety systems."
+prerequisites:
+  - "All previous modules (1-4)"
+  - "Tier A content from Module 4 (Whisper, LLM, VLA concepts)"
+  - "Tier C VSLAM deployment (Module 3, Week 8)"
+  - "Understanding of Dead Man Switch safety patterns"
+learning_outcomes:
+  - "Deploy complete voice-to-navigation pipeline on physical Unitree robot"
+  - "Integrate Whisper speech-to-text, LLM planning, and Nav2 navigation"
+  - "Implement comprehensive safety systems for physical deployment"
+  - "Validate end-to-end voice-controlled navigation in real environment"
+estimated_time: 300
+tier_support:
+  A: true
+  B: true
+  C: true
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import TierBadge from '@site/src/components/TierBadge';
+
+# Tier C Extension: Full Capstone Physical Deployment
+
+<TierBadge tiers={["C"]} />
+
+## Why This Matters
+
+The full capstone project represents the culmination of your journey from ROS 2 fundamentals to complete autonomous humanoid robot systems. Deploying the complete voice-controlled navigation pipeline on a physical Unitree robot demonstrates mastery of the entire technology stack: from low-level ROS 2 communication patterns to high-level AI reasoning and safe physical execution. This project showcases the integration of all four modules (ROS 2, Simulation, Navigation, VLA) in a real-world application.
+
+**Real-World Applications**:
+- **Home Assistant Robots**: Voice-controlled household tasks and navigation
+- **Industrial Logistics**: Autonomous material transport with voice command interfaces
+- **Healthcare Support**: Patient assistance robots responding to voice requests
+- **Disaster Response**: Voice-controlled exploration and reporting in hazardous environments
+
+:::danger Hardware Safety
+Before deploying the full capstone to physical hardware:
+- **All safety systems must be active and tested**: Dead Man Switch (100ms timeout), emergency stop, balance monitoring
+- **Physical workspace must be prepared**: Clear operational boundaries, obstacle-free zones, emergency stop access
+- **Personnel must be trained**: Emergency procedures, manual override, incident response
+- **Backup plans must be ready**: Return-to-home, safe shutdown, manual intervention protocols
+:::
+
+---
+
+## Complete System Architecture
+
+### End-to-End Pipeline Overview
+
+The complete voice-controlled navigation system integrates all modules learned:
+
+<MermaidDiagram
+  id="capstone-architecture"
+  type="graph"
+  source={`graph TB
+    A[🗣️ Voice Command<br/>"Go to kitchen"] --> B[👂 Whisper<br/>Speech-to-Text]
+    B --> C[🧠 LLM<br/>Intent Parsing]
+    C --> D[🗺️ Nav2<br/>Path Planning]
+    D --> E[🛡️ Safety Controller<br/>Dead Man Switch]
+    E --> F[🤖 Unitree Robot<br/>Physical Execution]
+
+    G[👀 VSLAM<br/>Environment Mapping] --> D
+    H[📡 LiDAR<br/>Obstacle Detection] --> D
+    I[IMU Motor Safety] --> E
+
+    F --> J[📱 Mobile App<br/>Status Reporting]
+    F --> K[💻 Remote Monitor<br/>Debug Interface]
+
+    style A fill:#e1f5ff
+    style F fill:#f0ffe1
+    style E fill:#fff4e1
+    style G fill:#ffe1e1
+  `}
+  altText="End-to-end voice-controlled navigation pipeline: voice command goes to Whisper speech-to-text, then to LLM intent parsing, then to Nav2 path planning, then to safety controller with Dead Man Switch, then to Unitree robot for physical execution. Supporting inputs: VSLAM for environment mapping, LiDAR for obstacle detection, IMU/motor safety for safety controller. Outputs: mobile app status reporting and remote monitoring."
+  caption="Complete voice-controlled navigation system architecture integrating all modules."
+/>
+
+### System Integration Points
+
+Each module contributes critical components to the full system:
+
+- **Module 1 (ROS 2)**: Communication patterns, topic architecture, service interfaces
+- **Module 2 (Simulation)**: Understanding of sim-to-real transfer challenges
+- **Module 3 (Navigation)**: VSLAM, Nav2, safety patterns, Dead Man Switch implementation
+- **Module 4 (VLA)**: Voice processing, LLM integration, action execution
+
+---
+
+## Physical Deployment Architecture
+
+### Hardware Requirements
+
+For complete physical deployment on Unitree robots:
+
+| Component | Requirement | Purpose |
+|-----------|-------------|---------|
+| **Unitree Go2/G1** | Functional with ROS 2 interface | Physical platform for navigation |
+| **Microphone Array** | USB audio device with 30Hz+ sampling | Voice input acquisition |
+| **Stereo Camera** | Unitree built-in or external | VSLAM and obstacle detection |
+| **Edge Computer** | NVIDIA Jetson Orin (recommended) | Processing power for AI stack |
+| **Network** | Stable WiFi connection | ROS 2 communication, cloud services |
+| **Power Supply** | Battery pack with 2+ hour life | Mobile operation capability |
+
+### Software Stack Integration
+
+```bash
+# Complete deployment setup
+├── unitree_ws/                 # Unitree robot workspace
+│   ├── src/
+│   │   ├── unitree_ros/       # Unitree-specific ROS 2 packages
+│   │   ├── whisper_ros/       # Whisper integration
+│   │   ├── llm_ros/           # LLM planning interface
+│   │   ├── nav2_ros/          # Nav2 configuration for Unitree
+│   │   └── safety_controller/ # Dead Man Switch implementation
+│   ├── config/
+│   │   ├── whisper_config.yaml
+│   │   ├── llm_config.yaml
+│   │   ├── nav2_unitree_config.yaml
+│   │   └── safety_limits.yaml
+│   └── launch/
+│       └── full_capstone.launch.py
+```
+
+---
+
+## Safety System Implementation
+
+### Multi-Layer Safety Architecture
+
+The complete system requires multiple layers of safety:
+
+<MermaidDiagram
+  id="safety-architecture"
+  type="graph"
+  source={`graph TD
+    A[Voice Command<br/>Intent Validation] --> B[LLM Action<br/>Safety Check]
+    B --> C[Nav2 Path<br/>Safety Validation]
+    C --> D[Safety Controller<br/>Dead Man Switch]
+    D --> E[Motor Command<br/>Limits & Filters]
+
+    F[Environment<br/>Monitoring] --> C
+    G[Balance<br/>Monitoring] --> D
+    H[Obstacle<br/>Detection] --> C
+
+    I[Emergency<br/>Stop] --> D
+    J[Timeout<br/>Protection] --> D
+
+    style A fill:#e1f5ff
+    style D fill:#fff4e1
+    style E fill:#f0ffe1
+    style I fill:#ffcccc
+  `}
+  altText="Multi-layer safety architecture: voice commands validated through intent validation, then LLM action safety check, then Nav2 path safety validation, then safety controller with Dead Man Switch, then motor command limits. Supporting inputs: environment monitoring, balance monitoring, obstacle detection. Emergency stop and timeout protection also feed into safety controller."
+  caption="Multi-layer safety architecture for physical capstone deployment."
+/>
+
+### Complete Safety Node Implementation
+
+<CodeExample
+  language="python"
+  title="full_capstone_safety.py"
+  tier="C"
+  description="Complete safety controller for the full capstone deployment with multiple safety layers."
+>
+```python
+#!/usr/bin/env python3
+"""
+Full Capstone Safety Controller
+
+Comprehensive safety system for complete voice-controlled navigation
+deployment on Unitree robots with multiple safety layers and 100ms
+Dead Man Switch timeout.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from geometry_msgs.msg import Twist, PoseStamped
+from sensor_msgs.msg import Imu, JointState, Image
+from std_msgs.msg import Bool, String, Float32
+from unitree_msgs.msg import LowCmd, MotorCmd
+from nav_msgs.msg import Path, Odometry
+from builtin_interfaces.msg import Duration
+import time
+import threading
+import numpy as np
+from collections import deque
+from typing import Dict, List, Tuple, Optional
+
+
+class FullCapstoneSafetyController(Node):
+    """Comprehensive safety controller for full capstone deployment."""
+
+    def __init__(self):
+        super().__init__('full_capstone_safety_controller')
+
+        # Safety parameters
+        self.declare_parameter('deadman_timeout', 0.1)  # 100ms timeout
+        self.declare_parameter('max_linear_velocity', 0.3)  # Conservative for safety
+        self.declare_parameter('max_angular_velocity', 0.3)
+        self.declare_parameter('balance_threshold', 0.4)  # More conservative
+        self.declare_parameter('collision_threshold', 0.5)  # meters
+        self.declare_parameter('workspace_boundary', 5.0)  # meters from start
+        self.declare_parameter('safety_enabled', True)
+
+        self.deadman_timeout = self.get_parameter('deadman_timeout').value
+        self.max_lin_vel = self.get_parameter('max_linear_velocity').value
+        self.max_ang_vel = self.get_parameter('max_angular_velocity').value
+        self.balance_threshold = self.get_parameter('balance_threshold').value
+        self.collision_threshold = self.get_parameter('collision_threshold').value
+        self.workspace_boundary = self.get_parameter('workspace_boundary').value
+        self.safety_enabled = self.get_parameter('safety_enabled').value
+
+        # Create QoS profile for safety-critical topics
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+        )
+
+        # Subscribers for all safety monitoring
+        self.voice_cmd_sub = self.create_subscription(
+            String,
+            '/voice_command_safe',
+            self.voice_command_callback,
+            qos_profile
+        )
+
+        self.llm_intent_sub = self.create_subscription(
+            String,
+            '/llm/intent_safe',
+            self.llm_intent_callback,
+            qos_profile
+        )
+
+        self.nav_goal_sub = self.create_subscription(
+            PoseStamped,
+            '/nav2/goal_safe',
+            self.nav_goal_callback,
+            qos_profile
+        )
+
+        self.cmd_vel_sub = self.create_subscription(
+            Twist,
+            '/cmd_vel_filtered',
+            self.cmd_vel_callback,
+            qos_profile
+        )
+
+        self.joint_state_sub = self.create_subscription(
+            JointState,
+            '/joint_states',
+            self.joint_state_callback,
+            qos_profile
+        )
+
+        self.imu_sub = self.create_subscription(
+            Imu,
+            '/imu/data',
+            self.imu_callback,
+            qos_profile
+        )
+
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            '/odometry/filtered',
+            self.odom_callback,
+            qos_profile
+        )
+
+        self.lidar_sub = self.create_subscription(
+            Image,
+            '/stereo_camera/depth_registered/image_raw',
+            self.lidar_callback,
+            qos_profile
+        )
+
+        # Publishers for safety outputs
+        self.motor_cmd_pub = self.create_publisher(LowCmd, '/lowcmd', qos_profile)
+        self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', qos_profile)
+        self.safety_status_pub = self.create_publisher(Bool, '/safety_ok', qos_profile)
+        self.safety_report_pub = self.create_publisher(String, '/safety_report', qos_profile)
+
+        # Safety state variables
+        self.last_voice_cmd_time = self.get_clock().now()
+        self.last_llm_cmd_time = self.get_clock().now()
+        self.last_cmd_vel_time = self.get_clock().now()
+        self.last_cmd_vel = Twist()
+        self.current_pose = None
+        self.current_joint_states = JointState()
+        self.current_imu = Imu()
+        self.current_odom = Odometry()
+        self.depth_data = None
+
+        self.balance_ok = True
+        self.velocity_safe = True
+        self.collision_free = True
+        self.in_workspace = True
+        self.emergency_stop_active = False
+        self.voice_cmd_valid = True
+        self.llm_intent_safe = True
+
+        # Thread-safe access
+        self.safety_lock = threading.Lock()
+
+        # Start safety monitoring timer (high frequency for quick response)
+        self.safety_timer = self.create_timer(0.01, self.comprehensive_safety_check)  # 100Hz
+
+        # Store initial position for workspace monitoring
+        self.initial_position = None
+
+        self.get_logger().info('Full Capstone Safety Controller initialized with comprehensive safety layers')
+
+    def voice_command_callback(self, msg):
+        """Handle voice command with safety validation."""
+        with self.safety_lock:
+            # Validate voice command content
+            command_text = msg.data.lower()
+            self.voice_cmd_valid = self.validate_voice_command(command_text)
+
+            if self.voice_cmd_valid:
+                self.last_voice_cmd_time = self.get_clock().now()
+                self.get_logger().debug(f'Valid voice command received: {command_text}')
+            else:
+                self.get_logger().warn(f'Invalid voice command blocked: {command_text}')
+
+    def validate_voice_command(self, command: str) -> bool:
+        """Validate voice command for safety."""
+        # Block potentially dangerous commands
+        dangerous_keywords = [
+            'maximum speed', 'fast', 'quick', 'danger', 'unsafe',
+            'ignore', 'bypass', 'override', 'disable safety'
+        ]
+
+        for keyword in dangerous_keywords:
+            if keyword in command:
+                return False
+
+        # Allow only safe navigation commands
+        safe_keywords = ['go to', 'move to', 'navigate', 'stop', 'return home']
+        return any(keyword in command for keyword in safe_keywords)
+
+    def llm_intent_callback(self, msg):
+        """Handle LLM intent with safety validation."""
+        with self.safety_lock:
+            intent = msg.data.lower()
+
+            # Validate LLM-generated intent
+            self.llm_intent_safe = self.validate_llm_intent(intent)
+
+            if self.llm_intent_safe:
+                self.last_llm_cmd_time = self.get_clock().now()
+                self.get_logger().debug(f'Valid LLM intent received: {intent}')
+            else:
+                self.get_logger().warn(f'Unsafe LLM intent blocked: {intent}')
+
+    def validate_llm_intent(self, intent: str) -> bool:
+        """Validate LLM-generated navigation intent."""
+        # Check for dangerous intents
+        dangerous_patterns = [
+            'go faster than', 'ignore obstacles', 'exceed limits',
+            'disable safety', 'bypass', 'maximum velocity'
+        ]
+
+        for pattern in dangerous_patterns:
+            if pattern in intent:
+                return False
+
+        return True
+
+    def nav_goal_callback(self, msg):
+        """Handle navigation goal with safety validation."""
+        with self.safety_lock:
+            goal_x = msg.pose.position.x
+            goal_y = msg.pose.position.y
+
+            # Check if goal is within safe workspace
+            if self.initial_position:
+                distance_to_goal = np.sqrt(
+                    (goal_x - self.initial_position.x)**2 +
+                    (goal_y - self.initial_position.y)**2
+                )
+
+                self.in_workspace = distance_to_goal <= self.workspace_boundary
+
+                if not self.in_workspace:
+                    self.get_logger().warn(f'Navigation goal outside workspace: {distance_to_goal:.2f}m')
+
+    def cmd_vel_callback(self, msg):
+        """Handle velocity commands with safety filtering."""
+        with self.safety_lock:
+            # Apply velocity limits
+            filtered_msg = Twist()
+            filtered_msg.linear.x = max(min(msg.linear.x, self.max_lin_vel), -self.max_lin_vel)
+            filtered_msg.linear.y = max(min(msg.linear.y, self.max_lin_vel), -self.max_lin_vel)
+            filtered_msg.angular.z = max(min(msg.angular.z, self.max_ang_vel), -self.max_ang_vel)
+
+            self.last_cmd_vel = filtered_msg
+            self.last_cmd_vel_time = self.get_clock().now()
+
+    def joint_state_callback(self, msg):
+        """Monitor joint states for safety."""
+        with self.safety_lock:
+            self.current_joint_states = msg
+
+    def imu_callback(self, msg):
+        """Monitor IMU data for balance safety."""
+        with self.safety_lock:
+            self.current_imu = msg
+
+            # Convert quaternion to Euler angles (simplified)
+            w, x, y, z = msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z
+            pitch = np.arcsin(2 * (w * y - z * x))
+            roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x*x + y*y))
+
+            # Check if robot is tilting too much
+            tilt_magnitude = np.sqrt(pitch*pitch + roll*roll)
+            self.balance_ok = tilt_magnitude < self.balance_threshold
+
+    def odom_callback(self, msg):
+        """Monitor odometry for workspace safety."""
+        with self.safety_lock:
+            self.current_odom = msg
+
+            # Store initial position if not set
+            if self.initial_position is None:
+                self.initial_position = msg.pose.pose.position
+                self.get_logger().info(f'Initial position set: ({self.initial_position.x:.2f}, {self.initial_position.y:.2f})')
+
+            # Check if current position is within workspace
+            pos = msg.pose.pose.position
+            distance_from_start = np.sqrt(
+                (pos.x - self.initial_position.x)**2 +
+                (pos.y - self.initial_position.y)**2
+            )
+
+            self.in_workspace = distance_from_start <= self.workspace_boundary
+
+    def lidar_callback(self, msg):
+        """Monitor depth data for collision avoidance."""
+        with self.safety_lock:
+            self.depth_data = msg
+
+            # Check for nearby obstacles (simplified)
+            # In practice, process depth image to find minimum distance
+            # This is a placeholder for actual depth processing
+            self.collision_free = True  # Placeholder - actual implementation would process depth data
+
+    def comprehensive_safety_check(self):
+        """Perform comprehensive safety checks at high frequency."""
+        current_time = self.get_clock().now()
+
+        with self.safety_lock:
+            # Check all safety conditions
+            time_since_voice = (current_time - self.last_voice_cmd_time).nanoseconds / 1e9
+            time_since_llm = (current_time - self.last_llm_cmd_time).nanoseconds / 1e9
+            time_since_cmd = (current_time - self.last_cmd_vel_time).nanoseconds / 1e9
+
+            # Determine if emergency stop is needed
+            emergency_conditions = [
+                time_since_cmd > self.deadman_timeout,  # Dead Man Switch timeout
+                not self.balance_ok,                    # Balance exceeded
+                not self.collision_free,                # Collision detected
+                not self.in_workspace,                  # Outside workspace
+                not self.safety_enabled,                # Safety disabled
+                not self.voice_cmd_valid,               # Invalid voice command
+                not self.llm_intent_safe,               # Unsafe LLM intent
+            ]
+
+            should_stop = any(emergency_conditions)
+
+            if should_stop:
+                self.emergency_stop_active = True
+
+                # Publish emergency stop
+                emergency_msg = Bool()
+                emergency_msg.data = True
+                self.emergency_stop_pub.publish(emergency_msg)
+
+                # Publish stop command
+                stop_cmd = self.create_emergency_stop_command()
+                self.motor_cmd_pub.publish(stop_cmd)
+
+                # Log the specific reason for emergency stop
+                reasons = []
+                if time_since_cmd > self.deadman_timeout:
+                    reasons.append("DEAD MAN SWITCH TIMEOUT")
+                if not self.balance_ok:
+                    reasons.append("BALANCE THRESHOLD EXCEEDED")
+                if not self.collision_free:
+                    reasons.append("COLLISION DETECTED")
+                if not self.in_workspace:
+                    reasons.append("WORKSPACE BOUNDARY VIOLATION")
+                if not self.voice_cmd_valid:
+                    reasons.append("INVALID VOICE COMMAND")
+                if not self.llm_intent_safe:
+                    reasons.append("UNSAFE LLM INTENT")
+
+                reason_str = ", ".join(reasons)
+                self.get_logger().error(f'EMERGENCY STOP: {reason_str}')
+
+                # Publish safety status
+                status_msg = Bool()
+                status_msg.data = False
+                self.safety_status_pub.publish(status_msg)
+
+                # Publish detailed report
+                report_msg = String()
+                report_msg.data = f"EMERGENCY_STOP: {reason_str}"
+                self.safety_report_pub.publish(report_msg)
+            else:
+                # Process safe command
+                safe_cmd = self.process_safe_command(self.last_cmd_vel)
+                self.motor_cmd_pub.publish(safe_cmd)
+
+                # Publish safety status
+                status_msg = Bool()
+                status_msg.data = True
+                self.safety_status_pub.publish(status_msg)
+
+                # Clear emergency stop if it was active
+                if self.emergency_stop_active:
+                    self.emergency_stop_active = False
+                    emergency_msg = Bool()
+                    emergency_msg.data = False
+                    self.emergency_stop_pub.publish(emergency_msg)
+
+    def process_safe_command(self, twist_cmd):
+        """Process twist command into safe motor commands."""
+        # Convert Twist to Unitree LowCmd with safety checks
+        low_cmd = LowCmd()
+
+        # Add safety transformations and limits
+        # This would include gait planning, balance control, etc.
+        # based on Unitree's specific control requirements
+
+        return low_cmd
+
+    def create_emergency_stop_command(self):
+        """Create emergency stop command for all motors."""
+        low_cmd = LowCmd()
+
+        # Set all motor commands to safe stop state
+        # This would involve setting appropriate values for Unitree's motor commands
+        # based on the specific model (Go2, G1, etc.)
+
+        return low_cmd
+
+    def destroy_node(self):
+        """Ensure robot stops safely when node is destroyed."""
+        # Publish emergency stop command
+        stop_cmd = self.create_emergency_stop_command()
+        self.motor_cmd_pub.publish(stop_cmd)
+
+        emergency_msg = Bool()
+        emergency_msg.data = True
+        self.emergency_stop_pub.publish(emergency_msg)
+
+        self.get_logger().info('Full Capstone Safety Controller shutting down - emergency stop issued')
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = FullCapstoneSafetyController()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down full capstone safety controller')
+    finally:
+        # Ensure emergency stop on shutdown
+        stop_cmd = node.create_emergency_stop_command()
+        node.motor_cmd_pub.publish(stop_cmd)
+
+        emergency_msg = Bool()
+        emergency_msg.data = True
+        node.emergency_stop_pub.publish(emergency_msg)
+
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+---
+
+## Complete System Integration
+
+### Launch File for Full System
+
+Create a comprehensive launch file that brings up all components safely:
+
+```python
+# launch/full_capstone.launch.py
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def generate_launch_description():
+    """Launch file for complete voice-controlled navigation system."""
+
+    ld = LaunchDescription()
+
+    # Declare launch arguments
+    declare_use_sim_time = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation time if true'
+    )
+
+    declare_robot_model = DeclareLaunchArgument(
+        'robot_model',
+        default_value='go2',
+        description='Unitree robot model (go2, g1, etc.)'
+    )
+
+    # Safety controller node
+    safety_controller = Node(
+        package='unitree_vla',
+        executable='full_capstone_safety',
+        name='full_capstone_safety_controller',
+        parameters=[
+            {'deadman_timeout': 0.1},  # 100ms
+            {'max_linear_velocity': 0.3},
+            {'max_angular_velocity': 0.3},
+            {'balance_threshold': 0.4},
+            {'collision_threshold': 0.5},
+            {'workspace_boundary': 5.0},
+            {'safety_enabled': True}
+        ],
+        remappings=[
+            ('/cmd_vel_filtered', '/cmd_vel_safety_filtered'),
+            ('/lowcmd', '/lowcmd'),
+            ('/emergency_stop', '/emergency_stop'),
+        ]
+    )
+
+    # Whisper speech-to-text node
+    whisper_node = Node(
+        package='whisper_ros',
+        executable='whisper_node',
+        name='whisper_speech_to_text',
+        parameters=[
+            {'model_size': 'small'},  # Use smaller model for real-time
+            {'sample_rate': 16000},
+            {'chunk_duration': 0.5},  # 500ms chunks for responsiveness
+        ],
+        condition=IfCondition(LaunchConfiguration('enable_voice_input'))
+    )
+
+    # LLM intent parser node
+    llm_parser = Node(
+        package='llm_ros',
+        executable='intent_parser',
+        name='llm_intent_parser',
+        parameters=[
+            {'model_name': 'gpt-3.5-turbo'},  # Or local model
+            {'temperature': 0.1},  # Deterministic for safety
+            {'max_tokens': 100},
+        ],
+        remappings=[
+            ('/voice_transcript', '/whisper/transcript'),
+            ('/llm/intent_safe', '/llm/intent_safe'),
+        ]
+    )
+
+    # Nav2 navigation node (configured for Unitree)
+    nav2_bringup_launch = PathJoinSubstitution([
+        FindPackageShare('nav2_bringup'),
+        'launch',
+        'navigation_launch.py'
+    ])
+
+    # Dead Man Switch safety integrator
+    safety_integrator = Node(
+        package='unitree_vla',
+        executable='safety_integrator',
+        name='safety_integrator',
+        parameters=[
+            {'deadman_timeout': 0.1},
+            {'command_timeout': 0.5},  # 500ms for processed commands
+        ],
+        remappings=[
+            ('/cmd_vel_unfiltered', '/nav2/cmd_vel_unfiltered'),
+            ('/cmd_vel_filtered', '/cmd_vel_filtered'),
+            ('/safety_ok', '/safety_ok'),
+        ]
+    )
+
+    # Add all nodes to launch description
+    ld.add_action(declare_use_sim_time)
+    ld.add_action(declare_robot_model)
+    ld.add_action(safety_controller)
+    ld.add_action(whisper_node)
+    ld.add_action(llm_parser)
+    ld.add_action(safety_integrator)
+
+    return ld
+```
+
+---
+
+## Physical Deployment Procedures
+
+### Pre-Deployment Checklist
+
+Before attempting physical deployment, complete this comprehensive checklist:
+
+**Hardware Safety**:
+- [ ] Emergency stop button accessible and tested
+- [ ] Workspace boundary marked and clear of obstacles
+- [ ] Robot battery charged to >80%
+- [ ] All sensors functioning (cameras, IMU, LiDAR)
+- [ ] Network connectivity stable
+
+**Software Safety**:
+- [ ] Dead Man Switch timeout configured (100ms)
+- [ ] All safety parameters validated
+- [ ] Emergency stop procedures tested in simulation
+- [ ] Workspace boundaries configured
+- [ ] Velocity limits enforced
+
+**Personnel Safety**:
+- [ ] Operator trained on emergency procedures
+- [ ] Incident response plan ready
+- [ ] Clear communication protocols established
+- [ ] Safe shutdown procedures practiced
+
+### Deployment Process
+
+1. **Initial Setup**:
+```bash
+# SSH to Unitree robot
+ssh unitree@192.168.123.161
+
+# Source environments
+source /opt/ros/humble/setup.bash
+source ~/unitree_ws/install/setup.bash
+source ~/whisper_ws/install/setup.bash
+
+# Verify all systems
+ros2 doctor --report
+```
+
+2. **Launch Safety Systems First**:
+```bash
+# Launch safety controller (critical first!)
+ros2 launch unitree_vla safety_controller.launch.py
+
+# Verify safety systems are active
+ros2 topic echo /safety_ok
+```
+
+3. **Launch Complete System**:
+```bash
+# Launch full capstone system
+ros2 launch unitree_vla full_capstone.launch.py
+
+# Monitor system health
+ros2 run rqt_gui rqt_gui
+```
+
+4. **Validation Testing**:
+```bash
+# Test voice command
+ros2 topic pub /voice_command std_msgs/String "data: 'go to charging station'"
+
+# Monitor safety status
+ros2 topic echo /safety_ok
+
+# Monitor navigation progress
+ros2 run rviz2 rviz2
+```
+
+---
+
+## Hands-On Exercise: Complete Physical Deployment
+
+### Objective
+
+Deploy the complete voice-controlled navigation system on your Unitree robot with all safety systems active and validate the end-to-end functionality.
+
+### Requirements
+
+1. **Hardware Setup**: Unitree Go2/G1 with stereo camera, microphone, ROS 2
+2. **Complete Software Stack**: Whisper, LLM, Nav2, safety controller
+3. **Safety Systems**: Dead Man Switch with 100ms timeout and all safety layers
+4. **Validation**: Demonstrate complete voice-to-navigation functionality
+
+### Implementation Steps
+
+<Exercise
+  id="ex-full-capstone"
+  title="Complete Physical Capstone Deployment"
+  difficulty="advanced"
+  variants={[
+    {
+      tier: "C",
+      description: "Deploy complete voice-controlled navigation system with full safety on Unitree robot",
+      setup: "Ensure Unitree robot is powered, all sensors functional, and complete software stack installed",
+      code: `#!/usr/bin/env python3
+# full_capstone_demo.py - Complete capstone demo
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Imu
+from std_msgs.msg import Bool
+import time
+
+class FullCapstoneDemo(Node):
+    def __init__(self):
+        super().__init__('full_capstone_demo')
+
+        # Publishers for system control
+        self.voice_cmd_pub = self.create_publisher(String, '/voice_command_safe', 1)
+        self.status_sub = self.create_subscription(Bool, '/safety_ok', self.status_callback, 1)
+
+        # System state
+        self.safety_ok = True
+        self.demo_active = False
+
+        # Timer for system monitoring
+        self.monitor_timer = self.create_timer(1.0, self.monitor_system)
+
+        self.get_logger().info('Full Capstone Demo started')
+
+    def status_callback(self, msg):
+        """Monitor safety status."""
+        self.safety_ok = msg.data
+        if not self.safety_ok and self.demo_active:
+            self.get_logger().error('SAFETY SYSTEM ACTIVATED - DEMO STOPPED')
+            self.demo_active = False
+
+    def monitor_system(self):
+        """Monitor overall system health."""
+        if self.demo_active:
+            self.get_logger().info('Demo running - safety status OK')
+
+def main():
+    rclpy.init()
+    node = FullCapstoneDemo()
+
+    # Example: Send a voice command after startup
+    time.sleep(5)  # Wait for systems to initialize
+    cmd_msg = String()
+    cmd_msg.data = 'go to the kitchen'
+    node.voice_cmd_pub.publish(cmd_msg)
+    node.get_logger().info('Sent voice command: go to the kitchen')
+
+    node.demo_active = True
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down capstone demo')
+    node.demo_active = False
+    node.destroy_node()
+    rclpy.shutdown()
+      `,
+      acceptanceCriteria: [
+        "Complete voice-controlled navigation system deployed on Unitree hardware",
+        "All safety systems active including Dead Man Switch (100ms timeout)",
+        "Voice command successfully processed and executed by robot",
+        "System operates within safety constraints and boundaries",
+        "Emergency stop procedures tested and functional"
+      ],
+      solution: "Validate with: ros2 topic echo /safety_ok, ros2 run rviz2 rviz2, and manual safety testing"
+    }
+  ]}
+/>
+
+---
+
+## Performance Optimization and Troubleshooting
+
+### Computational Performance
+
+Physical deployment on Unitree robots requires careful computational optimization:
+
+```bash
+# Monitor system performance during operation
+ssh unitree@192.168.123.161
+
+# CPU and memory usage
+htop
+
+# GPU usage (if available)
+nvidia-smi
+
+# ROS 2 performance monitoring
+ros2 run plotjuggler plotjuggler
+
+# Network performance
+iftop
+```
+
+### Common Performance Optimizations
+
+1. **Whisper Model Optimization**:
+```bash
+# Use smaller Whisper models for real-time performance
+export WHISPER_MODEL_SIZE=small  # Instead of large
+export WHISPER_CHUNK_DURATION=0.5  # 500ms chunks
+export WHISPER_THREADS=4  # Limit CPU usage
+```
+
+2. **LLM Integration**:
+```python
+# Optimize LLM calls for real-time response
+llm_config = {
+    'temperature': 0.1,  # More deterministic
+    'max_tokens': 100,   # Limit response length
+    'timeout': 5.0,      # 5-second timeout for safety
+}
+```
+
+3. **VSLAM Optimization**:
+```bash
+# Reduce VSLAM computational load
+export ORBSLAM_N_FEATURES=800    # Fewer features for speed
+export ORBSLAM_SCALE_FACTOR=1.1  # Faster scaling
+export ORBSLAM_N_LEVELS=6        # Fewer pyramid levels
+```
+
+### Troubleshooting Common Issues
+
+**Problem**: System becomes unresponsive during voice processing
+**Solutions**:
+- Use smaller Whisper models (tiny or small)
+- Increase chunk duration for more stable processing
+- Add timeout mechanisms to prevent blocking
+- Monitor CPU usage during operation
+
+**Problem**: Navigation fails in dynamic environments
+**Solutions**:
+- Implement fallback strategies for SLAM tracking loss
+- Use multiple sensor fusion for robust localization
+- Add relocalization capabilities
+- Test extensively in similar environments before deployment
+
+**Problem**: Safety system triggers falsely
+**Solutions**:
+- Fine-tune balance thresholds for specific environment
+- Adjust collision detection sensitivity
+- Verify IMU calibration
+- Test with different locomotion gaits
+
+---
+
+## Validation and Testing
+
+### System Integration Testing
+
+Validate the complete system with comprehensive test scenarios:
+
+1. **Voice Command Test**:
+   - "Go to the kitchen" → Verify navigation to kitchen location
+   - "Return to charging station" → Verify return-to-home
+   - "Stop" → Verify immediate stop
+
+2. **Safety System Test**:
+   - Disconnect voice input → Verify Dead Man Switch activation
+   - Introduce obstacle → Verify collision avoidance
+   - Tilt robot beyond threshold → Verify balance safety
+
+3. **Performance Test**:
+   - Continuous operation for 30 minutes → Verify stability
+   - Multiple consecutive commands → Verify responsiveness
+   - Boundary testing → Verify workspace limits
+
+### Metrics and Monitoring
+
+Track key performance indicators:
+
+- **Safety Response Time**: `<100ms` for emergency stops
+- **Voice Recognition Accuracy**: `>90%` in quiet environments
+- **Navigation Success Rate**: `>95%` for known paths
+- **System Uptime**: `>95%` during operation periods
+- **Computational Load**: `<80%` CPU utilization
+
+---
+
+## Summary
+
+**Key Takeaways for Full Capstone Deployment**:
+
+- **Safety First**: Multiple safety layers with 100ms Dead Man Switch timeout for physical deployment
+- **System Integration**: Complete integration of voice, AI, navigation, and safety systems
+- **Performance Optimization**: Careful tuning for real-time operation on constrained hardware
+- **Comprehensive Testing**: Extensive validation before and during physical deployment
+- **Emergency Procedures**: Well-tested safety mechanisms and manual overrides
+
+**Congratulations**:
+You have successfully completed the full Physical AI & Humanoid Robotics textbook! You now possess the skills to develop, deploy, and operate complete autonomous humanoid robot systems with proper safety mechanisms.
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the required Dead Man Switch timeout for the complete capstone physical deployment?',
+      options: [
+        '1000ms (1 second)',
+        '500ms (0.5 seconds)',
+        '100ms (0.1 seconds)',
+        '10ms (0.01 seconds)'
+      ],
+      correctAnswer: 2,
+      explanation: 'A 100ms (0.1 seconds) timeout is required for Dead Man Switch patterns in complete physical robot deployment, providing quick response to command failures while allowing for normal communication delays.',
+      hint: 'Look for safety implementation requirements in the safety section.'
+    },
+    {
+      id: 'q2',
+      question: 'Which safety layer validates voice commands for dangerous content?',
+      options: [
+        'LLM Intent Validator',
+        'Navigation Goal Checker',
+        'Voice Command Validator',
+        'Collision Detection System'
+      ],
+      correctAnswer: 2,
+      explanation: 'The Voice Command Validator checks incoming voice commands for dangerous keywords or unsafe intentions before processing them further in the system.',
+      hint: 'Review the safety controller implementation and voice command processing.'
+    },
+    {
+      id: 'q3',
+      question: 'What should happen if the robot moves outside the defined workspace boundary?',
+      options: [
+        'Continue to the destination',
+        'Stop and return to start position',
+        'Activate emergency stop and remain in place',
+        'Reduce speed but continue'
+      ],
+      correctAnswer: 2,
+      explanation: 'If the robot moves outside the defined workspace boundary, the safety system should activate emergency stop to prevent operation in untested or unsafe areas.',
+      hint: 'Consider the workspace monitoring and boundary violation response.'
+    },
+    {
+      id: 'q4',
+      question: 'Why is it important to use smaller Whisper models for physical deployment?',
+      options: [
+        'They provide better accuracy',
+        'They require less computational resources for real-time operation',
+        'They work with fewer microphones',
+        'They support more languages'
+      ],
+      correctAnswer: 1,
+      explanation: 'Smaller Whisper models require less computational resources, making them suitable for real-time operation on resource-constrained physical robots like Unitree platforms.',
+      hint: 'Consider computational constraints of physical robot platforms.'
+    },
+    {
+      id: 'q5',
+      question: 'What is the primary safety concern when LLM generates an unsafe navigation intent?',
+      options: [
+        'The robot moves slower',
+        'The robot may execute dangerous actions or navigate to unsafe locations',
+        'The robot saves more memory',
+        'The robot uses less power'
+      ],
+      correctAnswer: 1,
+      explanation: 'When LLM generates unsafe navigation intents, the robot may execute dangerous actions or navigate to unsafe locations. The safety system must validate and block unsafe LLM intents.',
+      hint: 'Consider the role of LLM intent validation in the safety architecture.'
+    }
+  ]}
+/>
+
+---
+
+## Congratulations!
+
+You have successfully completed the **Physical AI & Humanoid Robotics Textbook**! You now have the skills to:
+
+- Develop ROS 2 systems for humanoid robots
+- Deploy simulation-to-reality transfer pipelines
+- Integrate voice, AI, and navigation systems safely
+- Implement comprehensive safety mechanisms for physical deployment
+- Operate complete autonomous humanoid robot systems
+
+**Next Steps**:
+- Continue advancing your robotics skills with specialized applications
+- Contribute to open-source robotics projects
+- Apply these skills to research or commercial robotics applications
+- Share your knowledge with other robotics enthusiasts
+
+Thank you for completing this comprehensive robotics education journey!
+
+---

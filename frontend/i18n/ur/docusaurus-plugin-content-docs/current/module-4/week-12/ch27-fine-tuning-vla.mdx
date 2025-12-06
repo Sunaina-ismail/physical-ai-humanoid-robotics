@@ -1,0 +1,605 @@
+---
+sidebar_position: 27
+title: "باب 27: وژن-زبان-عمل ماڈلز کو فائن ٹیون کرنا (Fine-Tuning Vision-Language-Action Models)"
+description: "LoRA، ڈیٹا جمع کرنے کی حکمت عملیوں، اور ڈیپلائمنٹ کے لیے حفاظتی امور کے استعمال کے ساتھ مخصوص روبوٹکس کاموں کے لیے وژن-زبان-عمل ماڈلز کو فائن ٹیون کرنا سیکھیں۔"
+tags: [vla, fine-tuning, lora, robotics, transformer, multimodal, safety]
+tier: A
+prerequisites: ["ماڈیول 1: ROS 2 کی بنیاد", "ماڈیول 2: ڈیجیٹل ٹوئنز", "ماڈیول 3: نیویگیشن کے تصورات", "ماڈیول 4: VLA پیراڈائم", "ماڈیول 4: ٹرانسفارمر آرکیٹیکچر"]
+learning_outcomes: ["VLA ماڈلز کے لیے فائن ٹیوننگ کی تکنیکس کو سمجھنا", "VLA اڈاپٹیشن کے لیے LoRA نافذ کرنا", "تربیت کے لیے روبوٹکس ڈیٹا سیٹس جمع کرنا اور تیار کرنا", "VLA ڈیپلائمنٹ کے دوران حفاظتی پابندیاں لگانا", "فائن ٹیونڈ ماڈل کارکردگی کا جائزہ لینا"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';  
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# باب 27: وژن-زبان-عمل ماڈلز کو فائن ٹیون کرنا
+
+## تعارف
+
+وژن-زبان-عمل (VLA) ماڈلز کو فائن ٹیون کرنا مخصوص روبوٹکس کاموں اور ماحول کے لیے جامع مقصد کے اے آئی سسٹم کو اڈاپٹ کرنے کا ایک اہم قدم ہے۔ جبکہ OpenVLA اور RT-2 جیسے پری ٹرینڈ VLA ماڈلز متاثر کن جنرلائزیشن کی صلاحیات کا مظاہرہ کرتے ہیں، حقیقی دنیا کے روبوٹکس ایپلی کیشنز اکثر بہترین کارکردگی، حفاظت، اور قابلِ اعتمادی کے لیے ڈومین-مخصوص اڈاپٹیشن کی ضرورت رکھتے ہیں۔ یہ باب VLA ماڈلز کو فائن ٹیون کرنے کی عملی تکنیکس کا جائزہ لیتا ہے، ڈیٹا جمع کرنے کی حکمت عملیوں سے لے کر ڈیپلائمنٹ کے امور تک۔
+
+## سیکھنے کے اہداف
+
+اس باب کے اختتام تک، آپ کو اس بات کا اہل ہو جانا چاہیے:
+
+- VLA ماڈلز کے لیے مختلف فائن ٹیوننگ ایپروچز کو سمجھنا
+- کارآمد VLA فائن ٹیوننگ کے لیے لو رینک اڈاپٹیشن (LoRA) نافذ کرنا
+- روبوٹکس ایپلی کیشنز کے لیے ڈیٹا جمع کرنے کی پائپ لائنز ڈیزائن کرنا
+- تربیت کے دوران حفاظتی پابندیاں اور ایکشن اسپیس کی حدود لگانا
+- فائن ٹیونڈ ماڈل کارکردگی اور جنرلائزیشن کا جائزہ لینا
+
+## شرائطِ لازمہ
+
+اس باب کا آغاز کرنے سے پہلے، یقین کر لیں کہ آپ کے پاس ہے:
+
+- ماڈیول 1 مکمل (ROS 2 کی بنیاد، میسج پاسنگ)
+- ماڈیول 2 (ڈیجیٹل ٹوئنز، سیمولیشن کے تصورات)
+- ماڈیول 3 (نیویگیشن کے تصورات، Nav2 انضمام)
+- ماڈیول 4 ابواب 24-26 (VLA بنیاد، آرکیٹیکچر، اور نفاذ)
+- مشین لرننگ ٹریننگ پائپ لائنز کی بنیادی سمجھ
+- ڈیٹا سیٹ تیار کرنے اور ماڈل کے جائزے کا تجربہ
+
+## حقیقی دنیا کی مثلاً: مخصوص سرجن
+
+VLA ماڈلز کو فائن ٹیون کرنا مخصوص طبی تربیت کی طرح سمجھیں۔ ایک جامع مقصد کا اے آئی ماڈل کسی طبی طالب علم کی طرح ہو سکتا ہے جو بنیادی انATOMY اور طریقہ کار کو سمجھتا ہے، لیکن مخصوص سرجریز انجام دینے کے لیے، انہیں دل کی سرجری، نیوروسرجری، یا آرتھوپیڈکس میں مخصوص تربیت کی ضرورت ہوتی ہے۔ فائن ٹیوننگ ہمیں جامع مقصد کا VLA ماڈل لینے اور اسے مخصوص روبوٹکس کاموں جیسے کچن مینیپولیشن، گودام لا جسٹکس، یا ہیلتھ کیئر اسسٹنٹ کے لیے مخصوص کرنے کی اجازت دیتا ہے، جس سے یہ ان خاص ڈومینز کے لیے زیادہ درست اور قابلِ اعتماد ہو جاتا ہے۔
+
+## بنیادی تصورات
+
+### 1. فائن ٹیوننگ ایپروچز
+
+VLA فائن ٹیوننگ مخصوص روبوٹکس کاموں کے لیے پری ٹرینڈ ماڈلز کو اڈاپٹ کرنا شامل کرتا ہے۔ کلیدی ایپروچز میں شامل ہیں:
+
+#### فل فائن ٹیوننگ
+- تمام ماڈل پیرامیٹرز کو اپ ڈیٹ کرتا ہے
+- زیادہ تربیتی وسائل کی ضرورت ہوتی ہے
+- بہترین کارکردگی کے لیے مگر مہنگا
+
+```python
+# فل فائن ٹیوننگ کا کوڈ
+import torch
+import torch.nn as nn
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+def full_fine_tune(model, dataset, epochs=5, lr=1e-5):
+    """فل فائن ٹیوننگ"""
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+
+    model.train()
+    for epoch in range(epochs):
+        for batch in dataset:
+            optimizer.zero_grad()
+
+            # فارورڈ پاس
+            outputs = model(
+                input_ids=batch['input_ids'],
+                attention_mask=batch['attention_mask'],
+                labels=batch['labels']
+            )
+
+            # نقصان
+            loss = outputs.loss
+            loss.backward()
+
+            # آپٹیمائزر اسٹیپ
+            optimizer.step()
+```
+
+#### لو رینک اڈاپٹیشن (LoRA)
+- صرف چھوٹے ایڈاپٹر ماڈیولز کو تربیت دیتا ہے
+- کم میموری اور کمپیوٹ کی ضرورت ہوتی ہے
+- تیز تربیت اور اپ ڈیٹس
+
+<Tabs>
+<TabItem value="lora-implementation" label="LoRA نفاذ">
+
+```python
+import torch
+import torch.nn as nn
+
+class LoRALayer(nn.Module):
+    def __init__(self, in_features, out_features, rank=16, alpha=16):
+        super().__init__()
+        self.rank = rank
+        self.alpha = alpha
+
+        # A: (in_features, rank)
+        self.A = nn.Parameter(torch.randn(in_features, rank) * 0.01)
+        # B: (rank, out_features)
+        self.B = nn.Parameter(torch.zeros(rank, out_features))
+
+        # ڈیلٹا W = B @ A
+        # W_new = W_original + (B @ A) * (alpha / rank)
+
+    def forward(self, x):
+        # x: (batch, seq_len, in_features)
+        # delta_W = B @ A: (in_features, out_features)
+        delta_W = torch.matmul(self.B, self.A)
+        delta_W = delta_W * (self.alpha / self.rank)
+
+        # delta_output = x @ delta_W
+        delta_output = torch.matmul(x, delta_W)
+        return delta_output
+
+class LinearWithLoRA(nn.Module):
+    def __init__(self, linear_layer, rank=16, alpha=16):
+        super().__init__()
+        self.linear = linear_layer
+        self.lora = LoRALayer(
+            linear_layer.in_features,
+            linear_layer.out_features,
+            rank, alpha
+        )
+
+    def forward(self, x):
+        # اصل لکیری آؤٹ پٹ
+        original_output = self.linear(x)
+        # LoRA آؤٹ پٹ
+        lora_output = self.lora(x)
+        # مجموعہ
+        return original_output + lora_output
+```
+
+</TabItem>
+
+<TabItem value="lora-application" label="LoRA اطلاق">
+
+```python
+def apply_lora_to_vla_model(model, target_modules, rank=16, alpha=16):
+    """VLA ماڈل پر LoRA اطلاق کریں"""
+
+    for name, module in model.named_modules():
+        if any(target in name for target in target_modules):
+            if isinstance(module, nn.Linear):
+                # LoRA کے ساتھ لکیری لیئر کو تبدیل کریں
+                new_module = LinearWithLoRA(module, rank, alpha)
+                parent_name = '.'.join(name.split('.')[:-1])
+                parent = model.get_submodule(parent_name)
+
+                child_name = name.split('.')[-1]
+                setattr(parent, child_name, new_module)
+
+    return model
+
+# استعمال
+target_modules = ['q_proj', 'v_proj', 'k_proj', 'o_proj', 'up_proj', 'down_proj']
+model_with_lora = apply_lora_to_vla_model(vla_model, target_modules)
+```
+
+</TabItem>
+</Tabs>
+
+### 2. ڈیٹا جمع کرنے کی حکمت عملیاں
+
+| حکمت عملی | فائدے | کمیاں | استعمال کا موقع |
+|-----------|--------|--------|------------------|
+| ہیومن ڈیموں | قدرتی رفتار | وقت کا خرچ | تربیت کے لیے |
+| سیمولیشن | تیز ڈیٹا | حقیقت سے دور | پہلے سے تربیت |
+| تقلید سیکھنا | کم ڈیٹا | جنرلائزیشن | محدود ڈیٹا |
+| خود کار جمع | بڑے پیمانے پر | معیار | بڑے ڈیٹا سیٹ |
+
+#### ڈیٹا سیٹ کی تیاری
+
+```python
+import json
+import cv2
+import numpy as np
+from torch.utils.data import Dataset
+
+class RoboticVLADataset(Dataset):
+    def __init__(self, data_path, transform=None):
+        self.data_path = data_path
+        self.transform = transform
+        self.samples = self.load_samples()
+
+    def load_samples(self):
+        """روبوٹکس ڈیٹا لوڈ کریں"""
+        with open(f"{self.data_path}/annotations.json", 'r') as f:
+            annotations = json.load(f)
+
+        samples = []
+        for ann in annotations:
+            sample = {
+                'image_path': f"{self.data_path}/images/{ann['image']}",
+                'command': ann['command'],
+                'action': ann['action'],  # [linear_x, linear_y, angular_z, ...]
+                'robot_state': ann['robot_state'],
+                'environment': ann['environment']
+            }
+            samples.append(sample)
+
+        return samples
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+
+        # تصویر لوڈ کریں
+        image = cv2.imread(sample['image_path'])
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        if self.transform:
+            image = self.transform(image)
+
+        # کمانڈ ٹوکنائز کریں
+        command_tokens = self.tokenize_command(sample['command'])
+
+        # ایکشنز
+        action = torch.tensor(sample['action'], dtype=torch.float32)
+
+        return {
+            'image': image,
+            'command': command_tokens,
+            'action': action,
+            'robot_state': torch.tensor(sample['robot_state'], dtype=torch.float32)
+        }
+
+    def tokenize_command(self, command):
+        """کمانڈ کو ٹوکنائز کریں"""
+        # ٹوکنائزر لوڈ کریں
+        # اس کے لیے، ہم ایک سادہ ٹوکنائزیشن استعمال کریں گے
+        tokens = command.lower().split()
+        token_ids = [hash(token) % 30000 for token in tokens]  # 30K vocab
+        return torch.tensor(token_ids, dtype=torch.long)
+```
+
+---
+
+## LoRA کا نفاذ
+
+### LoRA کے لیے کوڈ
+
+```python
+import torch
+import torch.nn as nn
+from transformers import CLIPVisionModel, LlamaForCausalLM
+
+class LoRAVLA(nn.Module):
+    def __init__(self, base_model, rank=16, alpha=16):
+        super().__init__()
+        self.base_model = base_model
+        self.rank = rank
+        self.alpha = alpha
+
+        # LoRA لیئرز کو انیبل کریں
+        self.enable_lora_layers()
+
+    def enable_lora_layers(self):
+        """LoRA لیئرز کو انیبل کریں"""
+        target_modules = ['vision_encoder', 'language_model']
+
+        for name, module in self.base_model.named_modules():
+            if any(target in name for target in target_modules):
+                if isinstance(module, nn.Linear):
+                    # LoRA کے ساتھ تبدیل کریں
+                    lora_module = LinearWithLoRA(module, self.rank, self.alpha)
+                    parent_name = '.'.join(name.split('.')[:-1])
+                    parent = self.base_model.get_submodule(parent_name)
+                    child_name = name.split('.')[-1]
+                    setattr(parent, child_name, lora_module)
+
+    def forward(self, image, text):
+        return self.base_model(image, text)
+
+def train_lora_vla(model, dataset, epochs=10, lr=1e-3):
+    """LoRA VLA تربیت"""
+
+    # صرف LoRA پیرامیٹرز کو ٹرین کریں
+    lora_params = []
+    for name, param in model.named_parameters():
+        if 'lora' in name:
+            param.requires_grad = True
+            lora_params.append(param)
+        else:
+            param.requires_grad = False
+
+    optimizer = torch.optim.AdamW(lora_params, lr=lr)
+    criterion = nn.MSELoss()
+
+    model.train()
+    for epoch in range(epochs):
+        total_loss = 0
+        for batch in dataset:
+            optimizer.zero_grad()
+
+            predicted_actions = model(batch['image'], batch['command'])
+            loss = criterion(predicted_actions, batch['action'])
+
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+
+        avg_loss = total_loss / len(dataset)
+        print(f'ایپوک {epoch + 1}/{epochs}, نقصان: {avg_loss:.4f}')
+```
+
+### ROS 2 میں LoRA VLA
+
+```python
+#!/usr/bin/env python3
+# ROS 2 LoRA VLA نوڈ
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from cv_bridge import CvBridge
+import torch
+
+class LoRAVLAROSNode(Node):
+    def __init__(self):
+        super().__init__('lora_vla_ros_node')
+
+        # سبسکرائبرز
+        self.image_sub = self.create_subscription(
+            Image,
+            '/camera/image_raw',
+            self.image_callback,
+            10
+        )
+
+        self.command_sub = self.create_subscription(
+            String,
+            '/lora_vla/command',
+            self.command_callback,
+            10
+        )
+
+        # پبلیشرز
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        # کیمرہ کنٹرول
+        self.bridge = CvBridge()
+
+        # LoRA VLA ماڈل
+        self.model = self.load_lora_vla_model()
+        self.model.eval()
+
+        # وضاحتی متغیرات
+        self.current_image = None
+        self.current_command = None
+
+        # ڈیوائس
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.device)
+
+    def load_lora_vla_model(self):
+        """LoRA VLA ماڈل لوڈ کریں"""
+        # پری ٹرینڈ ماڈل لوڈ کریں
+        base_model = OpenVLAModel()  # یا آر ٹی-2
+        base_model.load_state_dict(torch.load('pretrained_vla.pth'))
+
+        # LoRA کے ساتھ اپ ڈیٹ کریں
+        lora_model = LoRAVLA(base_model, rank=16, alpha=16)
+        lora_model.load_state_dict(torch.load('lora_vla.pth'), strict=False)
+
+        return lora_model
+
+    def image_callback(self, msg):
+        """بصری ڈیٹا کو سنبھالیں"""
+        try:
+            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            # تصویر کو پروسیس کریں
+            self.current_image = self.preprocess_image(image)
+        except Exception as e:
+            self.get_logger().error(f'تصویر کی پروسیسنگ میں خرابی: {e}')
+
+    def command_callback(self, msg):
+        """زبانی حکم کو سنبھالیں"""
+        self.current_command = msg.data
+        if self.current_image is not None:
+            self.execute_lora_vla_command()
+
+    def preprocess_image(self, image):
+        """تصویر کو پری پروسیس کریں"""
+        import torchvision.transforms as transforms
+
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((224, 224)),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                               std=[0.229, 0.224, 0.225])
+        ])
+
+        tensor_image = transform(image).unsqueeze(0)  # [1, 3, 224, 224]
+        return tensor_image.to(self.device)
+
+    def execute_lora_vla_command(self):
+        """LoRA VLA کمانڈ انجام دیں"""
+        if self.current_image is not None and self.current_command is not None:
+            try:
+                # ٹیکسٹ کو ٹوکنائز کریں
+                text_tokens = self.tokenize_command(self.current_command)
+
+                # ماڈل کو چلائیں
+                with torch.no_grad():
+                    actions = self.model(self.current_image, text_tokens)
+
+                # ایکشنز کو ROS 2 میسج میں تبدیل کریں
+                cmd_vel = self.actions_to_cmd_vel(actions)
+                self.cmd_vel_pub.publish(cmd_vel)
+
+                self.get_logger().info(f'LoRA VLA کمانڈ انجام دیا: {self.current_command}')
+            except Exception as e:
+                self.get_logger().error(f'LoRA VLA کمانڈ میں خرابی: {e}')
+
+    def tokenize_command(self, command):
+        """کمانڈ کو ٹوکنائز کریں"""
+        tokens = command.lower().split()
+        token_ids = [hash(token) % 30000 for token in tokens]
+        return torch.tensor(token_ids, dtype=torch.long).unsqueeze(0).to(self.device)
+
+    def actions_to_cmd_vel(self, actions):
+        """ایکشنز کو cmd_vel میں تبدیل کریں"""
+        cmd_vel = Twist()
+
+        # فرض کریں کہ ایکشنز [linear_x, linear_y, linear_z, angular_x, angular_y, angular_z] ہیں
+        actions_np = actions.cpu().numpy().flatten()
+
+        if len(actions_np) >= 6:
+            cmd_vel.linear.x = float(actions_np[0])
+            cmd_vel.linear.y = float(actions_np[1])
+            cmd_vel.linear.z = float(actions_np[2])
+            cmd_vel.angular.x = float(actions_np[3])
+            cmd_vel.angular.y = float(actions_np[4])
+            cmd_vel.angular.z = float(actions_np[5])
+
+        return cmd_vel
+
+def main(args=None):
+    rclpy.init(args=args)
+    lora_vla_node = LoRAVLAROSNode()
+
+    try:
+        rclpy.spin(lora_vla_node)
+    except KeyboardInterrupt:
+        print("LoRA VLA نوڈ کو بند کیا جا رہا ہے")
+
+    lora_vla_node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+---
+
+## حفاظتی پابندیاں
+
+### تربیت کے دوران حفاظت
+
+```python
+class SafeVLATrainer:
+    def __init__(self, model, safety_threshold=0.9):
+        self.model = model
+        self.safety_threshold = safety_threshold
+
+    def safe_training_step(self, batch):
+        """حفاطت کے ساتھ تربیت کا ایک قدم"""
+        # ایکشنز کو حفاظتی حدود میں رکھیں
+        predicted_actions = self.model(batch['image'], batch['command'])
+
+        # حفاظتی چیک
+        safe_actions = self.apply_safety_constraints(predicted_actions)
+
+        # نقصان کا حساب
+        loss = self.compute_safe_loss(safe_actions, batch['action'])
+
+        return loss
+
+    def apply_safety_constraints(self, actions):
+        """حفاظتی پابندیاں لگائیں"""
+        # حدود کو چیک کریں
+        actions = torch.clamp(actions, min=-1.0, max=1.0)
+
+        # خطرناک ایکشنز کو فلٹر کریں
+        action_magnitude = torch.norm(actions, dim=-1)
+        mask = action_magnitude < self.safety_threshold
+        actions = actions * mask.unsqueeze(-1).float()
+
+        return actions
+
+    def compute_safe_loss(self, predicted, target):
+        """حفاطت کے ساتھ نقصان کا حساب"""
+        # بنیادی MSE نقصان
+        mse_loss = nn.MSELoss()(predicted, target)
+
+        # حفاظتی پنالٹی
+        action_magnitude = torch.norm(predicted, dim=-1)
+        safety_penalty = torch.mean(torch.relu(action_magnitude - self.safety_threshold))
+
+        return mse_loss + 0.1 * safety_penalty
+```
+
+---
+
+## کارکردگی کا جائزہ
+
+### فائن ٹیونڈ ماڈل کا جائزہ
+
+```python
+def evaluate_fine_tuned_vla(model, test_dataset):
+    """فائن ٹیونڈ VLA ماڈل کا جائزہ لیں"""
+
+    metrics = {
+        'action_accuracy': [],
+        'command_following': [],
+        'generalization': [],
+        'safety_compliance': [],
+        'response_time': []
+    }
+
+    model.eval()
+    with torch.no_grad():
+        for sample in test_dataset:
+            start_time = time.time()
+
+            # ماڈل کو چلائیں
+            predicted_action = model(sample['image'], sample['command'])
+
+            # کارروائی کی درستگی
+            action_acc = calculate_action_accuracy(predicted_action, sample['action'])
+            metrics['action_accuracy'].append(action_acc)
+
+            # کمانڈ کی تعمیل
+            cmd_following = check_command_following(sample['command'], predicted_action)
+            metrics['command_following'].append(cmd_following)
+
+            # جنرلائزیشن (نئے ماحول پر)
+            gen_score = test_generalization_on_new_env(sample['image'], predicted_action)
+            metrics['generalization'].append(gen_score)
+
+            # حفاظتی تعمیل
+            safety_score = check_safety_constraints(predicted_action)
+            metrics['safety_compliance'].append(safety_score)
+
+            # جواب کا وقت
+            response_time = time.time() - start_time
+            metrics['response_time'].append(response_time)
+
+    # اوسط میٹرکس
+    avg_metrics = {}
+    for key, values in metrics.items():
+        if values:
+            avg_metrics[key] = sum(values) / len(values)
+        else:
+            avg_metrics[key] = 0.0
+
+    return avg_metrics
+```
+
+---
+
+## مشق
+
+**VLA فائن ٹیوننگ کا منصوبہ بندی**: ایک گھریلو روبوٹ کے لیے فائن ٹیوننگ کا منصوبہ بندی کریں:
+
+1. **ڈیٹا**: ہیومن ڈیموں کا استعمال (5000+ نمونے)
+2. **ٹیکنک**: LoRA (کم وسائل)
+3. **حفاظت**: ایکشن حدود (0.5 میٹر/سیکنڈ)
+4. **میٹرکس**: کمانڈ تعمیل (90%+)
+
+<Quiz
+  title="وژن-زبان-عمل ماڈلز کو فائن ٹیون کرنا"
+  questions={[
+    {
+      question: "LoRA کا مطلب کیا ہے؟",
+      options: ["Low Rank Adaptation", "Large Robotics Algorithm", "Local Refined Architecture", "Linear Optimized Adaptation"],
+      answer: 0,
+      explanation: "LoRA لو رینک اڈاپٹیشن کا مختصر ہے"
+    },
+    {
+      question: "فل فائن ٹیوننگ کیا کرتا ہے؟",
+      options: ["صرف چند پیرامیٹر تبدیل کرتا ہے", "تمام پیرامیٹر تبدیل کرتا ہے", "کوئی پیرامیٹر نہیں تبدیل کرتا", "صرف وژن پیرامیٹر تبدیل کرتا ہے"],
+      answer: 1,
+      explanation: "فل فائن ٹیوننگ تمام ماڈل پیرامیٹر تبدیل کرتا ہے"
+    }
+  ]}
+/>

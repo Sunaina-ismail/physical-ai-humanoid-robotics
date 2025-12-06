@@ -1,0 +1,782 @@
+---
+title: "باب 2: ROS 2 نوڈس اور ٹاپکس (ROS 2 Nodes and Topics)"
+chapter_number: "1.2"
+module: 1
+sidebar_position: 2
+description: "Learn the fundamental building blocks of ROS 2: nodes and topics. Create your first publisher and subscriber nodes using rclpy."
+prerequisites:
+  - "باب 1: فزکل ای متعارف (Chapter 1: Introduction to Physical AI)"
+  - "Python functions and classes"
+  - "ROS 2 installation (Humble)"
+learning_outcomes:
+  - "Explain the publish-subscribe communication pattern in robotics systems"
+  - "Create a publisher node using Python and rclpy"
+  - "Create a subscriber node that receives and processes messages"
+  - "Visualize ROS 2 node graphs using rqt_graph"
+estimated_time: 60
+tier_support:
+  A: true
+  B: false
+  C: false
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# باب 2: ROS 2 نوڈس اور ٹاپکس (ROS 2 Nodes and Topics)
+
+<PrerequisiteCheck prerequisites={frontMatter.prerequisites} />
+
+## یہ کیوں اہم ہے (Why This Matters)
+
+In modern humanoid robots like **Tesla Optimus** and **Figure 02**, dozens of sensors generate data simultaneously—cameras capture images at 30 FPS, IMUs report orientation at 100 Hz, force sensors detect contact, and LiDAR builds 3D maps. All this data must flow to processing nodes (object detection, balance control, navigation) without tight coupling between components.
+
+The **publish-subscribe pattern** is how ROS 2 enables this flexible, scalable communication. It's the foundation of every production robotics system, from warehouse robots to autonomous vehicles. Understanding nodes and topics is your gateway to building real-world robot software.
+
+---
+
+## Analogy: The Radio Station and Listeners
+
+### Everyday Scenario
+
+Imagine you're listening to your favorite radio station. The DJ (broadcaster) speaks into a microphone, and their voice is transmitted over a specific frequency—let's say 101.5 FM. You, sitting in your car, tune your radio to 101.5 FM and hear the broadcast.
+
+Here's the key insight: **the DJ doesn't know you're listening**. They broadcast to the frequency regardless of whether one person, a thousand people, or nobody is tuned in. Similarly, you can turn your radio on or off without affecting the DJ's broadcast. Multiple people can listen to the same frequency simultaneously, all receiving the exact same content.
+
+### The Connection to Robotics
+
+In ROS 2, **nodes** are like individual radio stations or listeners. Each node is an independent program running on your robot. **Topics** are like radio frequencies—named channels that carry specific types of data.
+
+- A **publisher node** is like a radio station broadcasting on a frequency (e.g., a camera node publishing images to `/camera/image_raw`)
+- A **subscriber node** is like a radio receiver tuned to that frequency (e.g., an object detection node listening to `/camera/image_raw`)
+- The **topic name** is the frequency (e.g., `/camera/image_raw`)
+- The **message type** defines what kind of data flows through the topic (e.g., `sensor_msgs/Image`)
+
+### Where the Analogy Breaks Down
+
+Unlike radio waves, which can experience interference or require exclusive bandwidth, ROS 2 topics are digital: unlimited subscribers can receive the exact same message simultaneously without any degradation or conflict. Additionally, ROS 2 provides **Quality of Service (QoS)** controls that radio doesn't have—you can guarantee message delivery, control latency, and manage network bandwidth.
+
+### In Robotics Terms
+
+A **ROS 2 node** is an executable unit of computation—a single-purpose process that performs one task (e.g., reading sensor data, controlling motors, detecting objects). Nodes communicate by publishing and subscribing to **topics**, which are named channels for typed messages.
+
+The **publish-subscribe pattern** enables **loose coupling**: nodes don't need to know about each other's existence. A camera node publishes images regardless of who's listening. An object detector subscribes to images regardless of which camera produced them. You can add, remove, or restart nodes without breaking the entire system.
+
+---
+
+## Core Concepts
+
+### 1. ROS 2 Nodes
+
+A **node** is the fundamental building block of ROS 2 systems. Each node is an independent process responsible for a specific task.
+
+**Key Characteristics**:
+- **Single Responsibility**: One node, one job (e.g., `camera_driver` reads camera data, `object_detector` finds objects)
+- **Independent Execution**: Nodes run as separate processes, can crash and restart independently
+- **Named Identity**: Every node has a unique name (e.g., `/camera_node`, `/velocity_controller`)
+- **Communication via Topics/Services**: Nodes interact through ROS 2's middleware, not direct function calls
+
+**Real-World Example**: In Tesla Optimus, there might be nodes like:
+- `/camera_front` - Publishes images from the front-facing camera
+- `/yolo_detector` - Subscribes to images, publishes detected objects
+- `/grasp_planner` - Subscribes to objects, publishes grasp poses
+- `/arm_controller` - Subscribes to grasp poses, moves the arm
+
+<MermaidDiagram
+  id="ros2-node-graph"
+  type="graph"
+  source={`graph LR
+    Camera["📷 /camera_front<br/>(Camera Node)"] -->|/image_raw| Detector["🔍 /yolo_detector<br/>(Object Detection)"]
+    Detector -->|/detected_objects| Planner["🤖 /grasp_planner<br/>(Grasp Planning)"]
+    Planner -->|/grasp_pose| Controller["🦾 /arm_controller<br/>(Arm Control)"]
+
+    style Camera fill:#e1f5ff
+    style Detector fill:#f0ffe1
+    style Planner fill:#fff4e1
+    style Controller fill:#ffe1f5
+`}
+  caption="ROS 2 node graph for a simple robotic grasping pipeline. Each node is an independent process."
+  altText="Directed graph showing four ROS 2 nodes connected by topics: camera_front publishes to image_raw topic, yolo_detector subscribes and publishes to detected_objects, grasp_planner subscribes and publishes to grasp_pose, arm_controller subscribes to grasp_pose. Arrows show data flow from left to right."
+/>
+
+### 2. ROS 2 Topics
+
+A **topic** is a named communication channel that allows nodes to exchange messages asynchronously.
+
+**Key Characteristics**:
+- **Named Channel**: Topics have descriptive names using namespaces (e.g., `/camera/image_raw`, `/cmd_vel`)
+- **Typed Messages**: Each topic has a message type that defines data structure (e.g., `sensor_msgs/Image`, `geometry_msgs/Twist`)
+- **Many-to-Many**: Multiple publishers and multiple subscribers can use the same topic
+- **Asynchronous**: Publishers don't wait for acknowledgments; subscribers receive messages whenever they arrive
+
+**Topic Naming Conventions**:
+- Use lowercase with underscores: `/camera_front/image_raw` ✅
+- Avoid camelCase: `/cameraFront/imageRaw` ❌
+- Use namespaces to organize: `/robot1/camera/image`, `/robot2/camera/image`
+- Be descriptive: `/cmd_vel` (velocity commands), `/scan` (laser scan), `/odom` (odometry)
+
+### 3. Publishers and Subscribers
+
+#### Publishers
+
+A **publisher** is a node component that sends messages to a topic.
+
+<MermaidDiagram
+  id="publisher-architecture"
+  type="graph"
+  source={`graph LR
+    Node["📦 Node Process"] --> Publisher["📤 Publisher<br/>create_publisher()"]
+    Publisher -->|publishes| Topic["📡 Topic: /sensor_data<br/>(std_msgs/Float32)"]
+
+    style Node fill:#e1f5ff
+    style Publisher fill:#fff4e1
+    style Topic fill:#ffe1e1
+`}
+  caption="Publisher architecture: A node creates a publisher object that sends messages to a topic."
+  altText="Flow diagram showing a Node Process containing a Publisher component created with create_publisher() function, which publishes messages to a Topic named /sensor_data with message type std_msgs/Float32."
+/>
+
+**Publisher Creation Pattern** (rclpy):
+```python
+# Inside a node class
+self.publisher = self.create_publisher(
+    MessageType,        # e.g., std_msgs.msg.String
+    '/topic_name',      # e.g., '/temperature'
+    queue_size          # e.g., 10 (buffer size)
+)
+```
+
+#### Subscribers
+
+A **subscriber** is a node component that receives messages from a topic.
+
+<MermaidDiagram
+  id="subscriber-architecture"
+  type="graph"
+  source={`graph LR
+    Topic["📡 Topic: /sensor_data<br/>(std_msgs/Float32)"] -->|delivers| Subscriber["📥 Subscriber<br/>create_subscription()"]
+    Subscriber --> Callback["⚙️ Callback Function<br/>process_data()"]
+    Callback --> Node["📦 Node Process"]
+
+    style Topic fill:#ffe1e1
+    style Subscriber fill:#fff4e1
+    style Callback fill:#f0ffe1
+    style Node fill:#e1f5ff
+`}
+  caption="Subscriber architecture: Messages arrive from topic, trigger callback function in the node."
+  altText="Flow diagram showing a Topic named /sensor_data delivering messages to a Subscriber created with create_subscription(), which triggers a Callback Function that processes data within the Node Process."
+/>
+
+**Subscriber Creation Pattern** (rclpy):
+```python
+# Inside a node class
+self.subscription = self.create_subscription(
+    MessageType,        # Must match publisher's type
+    '/topic_name',      # Must match publisher's topic
+    self.callback,      # Function called when message arrives
+    queue_size          # Buffer size
+)
+
+def callback(self, msg):
+    # This function runs automatically when messages arrive
+    self.get_logger().info(f'Received: {msg.data}')
+```
+
+### 4. Message Types
+
+Every topic has a **message type** that defines the structure of data being sent. ROS 2 provides standard message packages:
+
+| Package | Purpose | Common Types |
+|---------|---------|--------------|
+| `std_msgs` | Basic types | `String`, `Int32`, `Float32`, `Bool` |
+| `sensor_msgs` | Sensor data | `Image`, `LaserScan`, `Imu`, `JointState` |
+| `geometry_msgs` | Geometric data | `Twist` (velocity), `Pose`, `Point` |
+| `nav_msgs` | Navigation | `Odometry`, `Path` |
+
+**Example**: A `geometry_msgs/Twist` message for robot velocity:
+```python
+from geometry_msgs.msg import Twist
+
+cmd_vel = Twist()
+cmd_vel.linear.x = 0.5   # Move forward at 0.5 m/s
+cmd_vel.angular.z = 0.2  # Turn left at 0.2 rad/s
+```
+
+### 5. Quality of Service (QoS)
+
+**QoS policies** control how messages are delivered. Think of QoS as delivery guarantees for your data.
+
+**Key QoS Settings**:
+
+- **Reliability**:
+  - `RELIABLE`: Guarantee delivery (TCP-like, use for commands)
+  - `BEST_EFFORT`: Send and forget (UDP-like, use for high-frequency sensor data)
+
+- **Durability**:
+  - `TRANSIENT_LOCAL`: Store last message for late joiners
+  - `VOLATILE`: Only deliver to active subscribers
+
+- **History**:
+  - `KEEP_LAST(n)`: Buffer last n messages
+  - `KEEP_ALL`: Buffer all messages (can cause memory issues)
+
+**When to Use What**:
+- **Camera images** (30 Hz): Best-effort, volatile, keep_last(1) — latest image matters most
+- **Motor commands**: Reliable, volatile, keep_last(10) — ensure commands arrive
+- **Configuration parameters**: Reliable, transient_local — late nodes get last config
+
+:::tip
+For most beginner use cases, the default QoS (RELIABLE, VOLATILE, KEEP_LAST(10)) works well. Optimize only when you encounter specific issues.
+:::
+
+---
+
+## Worked Example: Temperature Monitoring System
+
+Let's build a complete system where one node simulates a temperature sensor and another node monitors the readings.
+
+### System Architecture
+
+<MermaidDiagram
+  id="temperature-sequence-diagram"
+  type="sequence"
+  source={`sequenceDiagram
+    participant Pub as 🌡️ temp_publisher
+    participant Topic as 📡 /temperature
+    participant Sub as 📊 temp_subscriber
+
+    loop Every 1 second
+        Pub->>Topic: Publish 23.5°C
+        Topic->>Sub: Deliver 23.5°C
+        Sub->>Sub: Log temperature
+
+        alt Temperature > 30°C
+            Sub->>Sub: ⚠️ Log warning
+        end
+    end
+`}
+  caption="Sequence diagram of temperature monitoring system. Publisher sends data at 1 Hz, subscriber receives and logs."
+  altText="Sequence diagram showing temp_publisher node publishing temperature values to /temperature topic every 1 second, temp_subscriber receiving the values and logging them, with conditional warning logic when temperature exceeds 30 degrees Celsius."
+/>
+
+### Publisher Node: Simulated Temperature Sensor
+
+<CodeExample
+  language="python"
+  title="temp_publisher_node.py"
+  tier="A"
+  description="ROS 2 publisher that simulates a temperature sensor publishing Float32 messages."
+>
+```python
+#!/usr/bin/env python3
+"""
+Temperature Publisher Node
+
+Simulates a temperature sensor that publishes random temperature readings
+to the /temperature topic at 1 Hz (once per second).
+
+Message Type: std_msgs/Float32
+Topic: /temperature
+Frequency: 1 Hz
+"""
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+import random
+
+
+class TemperaturePublisher(Node):
+    """Node that publishes simulated temperature sensor data."""
+
+    def __init__(self):
+        # Initialize the node with name 'temp_publisher'
+        super().__init__('temp_publisher')
+
+        # Create publisher for Float32 messages on /temperature topic
+        # Queue size 10 means buffer the last 10 messages if subscriber is slow
+        self.publisher = self.create_publisher(Float32, '/temperature', 10)
+
+        # Create timer that calls publish_temperature() every 1.0 seconds
+        self.timer = self.create_timer(1.0, self.publish_temperature)
+
+        self.get_logger().info('Temperature Publisher Node started')
+
+    def publish_temperature(self):
+        """Callback function that publishes temperature readings."""
+        # Create a Float32 message
+        msg = Float32()
+
+        # Simulate temperature sensor: random value between 20.0 and 35.0°C
+        msg.data = random.uniform(20.0, 35.0)
+
+        # Publish the message to /temperature topic
+        self.publisher.publish(msg)
+
+        # Log the published value
+        self.get_logger().info(f'Publishing: {msg.data:.2f}°C')
+
+
+def main(args=None):
+    # Initialize ROS 2 Python client library
+    rclpy.init(args=args)
+
+    # Create the node
+    node = TemperaturePublisher()
+
+    try:
+        # Keep node running until Ctrl+C
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Node stopped by user')
+    finally:
+        # Clean shutdown
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+### Subscriber Node: Temperature Monitor
+
+<CodeExample
+  language="python"
+  title="temp_subscriber_node.py"
+  tier="A"
+  description="ROS 2 subscriber that receives temperature messages and logs warnings when temperature is too high."
+>
+```python
+#!/usr/bin/env python3
+"""
+Temperature Subscriber Node
+
+Monitors temperature readings from /temperature topic and logs warnings
+when temperature exceeds a safety threshold.
+
+Message Type: std_msgs/Float32
+Topic: /temperature
+Warning Threshold: 30.0°C
+"""
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+
+
+class TemperatureSubscriber(Node):
+    """Node that subscribes to temperature data and monitors for warnings."""
+
+    def __init__(self):
+        # Initialize the node with name 'temp_subscriber'
+        super().__init__('temp_subscriber')
+
+        # Define warning threshold (in degrees Celsius)
+        self.warning_threshold = 30.0
+
+        # Create subscription to /temperature topic
+        # The temperature_callback function will be called when messages arrive
+        self.subscription = self.create_subscription(
+            Float32,
+            '/temperature',
+            self.temperature_callback,
+            10  # Queue size
+        )
+
+        # Prevent unused variable warning
+        self.subscription
+
+        self.get_logger().info('Temperature Subscriber Node started')
+        self.get_logger().info(f'Warning threshold: {self.warning_threshold}°C')
+
+    def temperature_callback(self, msg):
+        """
+        Callback function executed when a message arrives on /temperature.
+
+        Args:
+            msg (Float32): Temperature reading in degrees Celsius
+        """
+        temperature = msg.data
+
+        # Log the received temperature
+        self.get_logger().info(f'Received: {temperature:.2f}°C')
+
+        # Check if temperature exceeds warning threshold
+        if temperature > self.warning_threshold:
+            self.get_logger().warn(
+                f'⚠️  HIGH TEMPERATURE ALERT: {temperature:.2f}°C '
+                f'(threshold: {self.warning_threshold}°C)'
+            )
+
+
+def main(args=None):
+    # Initialize ROS 2 Python client library
+    rclpy.init(args=args)
+
+    # Create the node
+    node = TemperatureSubscriber()
+
+    try:
+        # Keep node running and processing callbacks until Ctrl+C
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Node stopped by user')
+    finally:
+        # Clean shutdown
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+### Running the Example
+
+**Terminal 1: Start the Publisher**
+```bash
+# Make the script executable (first time only)
+chmod +x temp_publisher_node.py
+
+# Run the publisher
+python3 temp_publisher_node.py
+```
+
+**Expected Output**:
+```
+[INFO] [temp_publisher]: Temperature Publisher Node started
+[INFO] [temp_publisher]: Publishing: 24.73°C
+[INFO] [temp_publisher]: Publishing: 28.91°C
+[INFO] [temp_publisher]: Publishing: 31.45°C
+```
+
+**Terminal 2: Start the Subscriber**
+```bash
+# Make the script executable (first time only)
+chmod +x temp_subscriber_node.py
+
+# Run the subscriber
+python3 temp_subscriber_node.py
+```
+
+**Expected Output**:
+```
+[INFO] [temp_subscriber]: Temperature Subscriber Node started
+[INFO] [temp_subscriber]: Warning threshold: 30.0°C
+[INFO] [temp_subscriber]: Received: 24.73°C
+[INFO] [temp_subscriber]: Received: 28.91°C
+[INFO] [temp_subscriber]: Received: 31.45°C
+[WARN] [temp_subscriber]: ⚠️  HIGH TEMPERATURE ALERT: 31.45°C (threshold: 30.0°C)
+```
+
+### Visualizing with rqt_graph
+
+**Terminal 3: Launch rqt_graph**
+```bash
+rqt_graph
+```
+
+You'll see a visual representation of the node graph:
+
+<MermaidDiagram
+  id="rqt-graph-visualization"
+  type="graph"
+  source={`graph LR
+    Pub["/temp_publisher"] -->|/temperature<br/>std_msgs/Float32| Sub["/temp_subscriber"]
+
+    style Pub fill:#e1f5ff
+    style Sub fill:#f0ffe1
+`}
+  caption="ROS 2 graph visualization showing publisher-subscriber connection via /temperature topic."
+  altText="Directed graph showing temp_publisher node connected to temp_subscriber node via /temperature topic with message type std_msgs/Float32."
+/>
+
+---
+
+## Hands-On Exercise
+
+{/* TODO: Fix Exercise component to use correct props structure with variants array */}
+
+### 🧪 Build a Multi-Sensor Monitoring System
+
+**Difficulty**: Intermediate | **Tier**: 🟢 A (Simulation) | **Est. Time**: 30 minutes
+
+### Objective
+
+Create a ROS 2 system with **two publishers** (temperature and humidity sensors) and **one subscriber** (environmental monitor) that processes both data streams.
+
+### Requirements
+
+1. **Temperature Publisher** (`temp_sensor_node.py`):
+   - Publishes to `/sensors/temperature` (std_msgs/Float32)
+   - Random values: 18.0 - 28.0°C
+   - Frequency: 2 Hz (twice per second)
+
+2. **Humidity Publisher** (`humidity_sensor_node.py`):
+   - Publishes to `/sensors/humidity` (std_msgs/Float32)
+   - Random values: 30.0 - 70.0% relative humidity
+   - Frequency: 1 Hz (once per second)
+
+3. **Environmental Monitor Subscriber** (`env_monitor_node.py`):
+   - Subscribes to **both** `/sensors/temperature` and `/sensors/humidity`
+   - Logs each reading with timestamp
+   - **Bonus**: Log a warning if temperature > 25°C **AND** humidity > 60%
+
+### Acceptance Criteria
+
+- [ ] Temperature publisher sends messages at 2 Hz
+- [ ] Humidity publisher sends messages at 1 Hz
+- [ ] Monitor node receives and logs messages from both topics
+- [ ] All three nodes can run simultaneously
+- [ ] `ros2 topic list` shows both `/sensors/temperature` and `/sensors/humidity`
+- [ ] `ros2 topic echo /sensors/temperature` displays temperature readings
+- [ ] **Bonus**: Combined warning logic works correctly
+
+### Hints
+
+1. **Multiple Subscribers in One Node**: Create two `create_subscription()` calls in the same node class, each with its own callback function.
+
+2. **Timer Frequencies**: Use `self.create_timer(0.5, callback)` for 2 Hz (0.5 seconds) and `self.create_timer(1.0, callback)` for 1 Hz.
+
+3. **Sharing State Between Callbacks**: Store the latest temperature and humidity as class attributes:
+   ```python
+   self.latest_temp = None
+   self.latest_humidity = None
+   ```
+   Then check both values in each callback.
+
+4. **Testing Individual Topics**:
+   ```bash
+   # Check if topics exist
+   ros2 topic list
+
+   # See live messages
+   ros2 topic echo /sensors/temperature
+
+   # Check message rate
+   ros2 topic hz /sensors/temperature
+   ```
+
+### Solution Skeleton
+
+<details>
+<summary>Click to reveal starter code for Environmental Monitor</summary>
+
+```python
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+
+class EnvironmentalMonitor(Node):
+    def __init__(self):
+        super().__init__('env_monitor')
+
+        # Store latest readings
+        self.latest_temp = None
+        self.latest_humidity = None
+
+        # TODO: Create subscription to /sensors/temperature
+        # Call self.temperature_callback when messages arrive
+
+        # TODO: Create subscription to /sensors/humidity
+        # Call self.humidity_callback when messages arrive
+
+        self.get_logger().info('Environmental Monitor started')
+
+    def temperature_callback(self, msg):
+        self.latest_temp = msg.data
+        self.get_logger().info(f'Temperature: {self.latest_temp:.2f}°C')
+        self.check_alert()
+
+    def humidity_callback(self, msg):
+        self.latest_humidity = msg.data
+        self.get_logger().info(f'Humidity: {self.latest_humidity:.2f}%')
+        self.check_alert()
+
+    def check_alert(self):
+        # TODO: Implement combined warning logic
+        # Check if both values are available and exceed thresholds
+        pass
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = EnvironmentalMonitor()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+</details>
+
+---
+
+## Summary
+
+**Key Takeaways**:
+
+- **ROS 2 nodes** are independent processes that perform specific tasks (single responsibility principle)
+- **Topics** are named communication channels that enable asynchronous message passing
+- **Publishers** send messages to topics without knowing who receives them (loose coupling)
+- **Subscribers** receive messages via callback functions that execute automatically
+- **Message types** define the structure of data (e.g., `std_msgs/Float32`, `sensor_msgs/Image`)
+- **QoS policies** control reliability, durability, and buffering behavior
+- **rqt_graph** visualizes the node graph for debugging and system understanding
+
+**The Publish-Subscribe Pattern** enables:
+- Modular robot architectures (add/remove nodes easily)
+- Parallel processing (multiple nodes process same data simultaneously)
+- Fault isolation (one node crash doesn't break the entire system)
+- Reusability (same sensor node works with different processing nodes)
+
+This pattern is foundational to all modern robotics systems, from small research robots to production humanoids like Tesla Optimus.
+
+---
+
+## Reflection Questions
+
+1. **When would you use topics vs. services?**
+   - Hint: Think about whether you need continuous data streaming or request-response interaction. Would motor control commands use a topic or service? What about asking "is the door open?"
+
+2. **What happens if a subscriber processes messages slower than the publisher sends them?**
+   - Hint: Consider the queue size parameter (e.g., `queue_size=10`). What happens when the buffer fills up? How does QoS reliability policy affect this?
+
+3. **How would you design the topic structure for a humanoid robot with 10 cameras, 20 motors, and 30 force sensors?**
+   - Hint: Think about topic naming conventions, namespaces, and organization. Would you use `/camera_1`, `/camera_2`, ... or a different pattern?
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the main advantage of the publish-subscribe pattern in ROS 2?',
+      options: [
+        'Faster communication than services',
+        'Nodes don\'t need to know about each other (loose coupling)',
+        'Messages are guaranteed to arrive with zero latency',
+        'Only one subscriber per topic is allowed for security'
+      ],
+      correctAnswer: 1,
+      explanation: 'The publish-subscribe pattern enables loose coupling: publishers and subscribers are independent. A camera node publishes images regardless of who\'s listening, and an object detector subscribes regardless of which camera produces images. This modularity allows adding/removing nodes without breaking the system.',
+      hint: 'Go back to the "In Robotics Terms" section under the Radio Station analogy.'
+    },
+    {
+      id: 'q2',
+      question: 'True or False: A publisher must wait for a subscriber to be ready before sending messages.',
+      options: [
+        'True - Publishers block until at least one subscriber connects',
+        'False - Publishers send messages regardless of subscribers',
+      ],
+      correctAnswer: 1,
+      explanation: 'False. Publishers operate independently—they send messages to topics whether or not any subscribers are listening. This is like a radio station broadcasting regardless of how many people are tuned in. The publisher doesn\'t block or wait.',
+      hint: 'Think about the radio analogy—does the DJ wait for listeners before speaking?'
+    },
+    {
+      id: 'q3',
+      question: 'What determines the structure of data sent on a topic?',
+      options: [
+        'The publisher node\'s internal implementation',
+        'The message type (e.g., std_msgs/String, sensor_msgs/Image)',
+        'The topic name (e.g., /camera/image_raw)',
+        'The subscriber\'s callback function signature'
+      ],
+      correctAnswer: 1,
+      explanation: 'The message type defines the data structure. For example, std_msgs/Float32 contains a single float field named "data", while geometry_msgs/Twist contains linear and angular velocity vectors. Both publisher and subscriber must use the same message type for compatibility.',
+      hint: 'Review the "Message Types" section—what did we import from std_msgs.msg?'
+    },
+    {
+      id: 'q4',
+      question: 'How many subscribers can listen to a single topic?',
+      options: [
+        'Exactly one (one-to-one)',
+        'Zero or one (optional listener)',
+        'Zero, one, or many (broadcast)',
+        'Always at least one (required listener)'
+      ],
+      correctAnswer: 2,
+      explanation: 'Zero, one, or many subscribers can listen to a topic. A camera might publish images with zero subscribers (data is lost), one subscriber (object detector), or many subscribers (object detector + data logger + visualizer). Publishers are unaware of subscriber count.',
+      hint: 'Review the Subscriber Architecture diagram—how many subscribers received the same message?'
+    },
+    {
+      id: 'q5',
+      question: 'Fill in the blank: A ________ function is called automatically when a message arrives at a subscriber.',
+      options: [
+        'main',
+        'callback',
+        'publisher',
+        'init'
+      ],
+      correctAnswer: 1,
+      explanation: 'A callback function (e.g., temperature_callback) is registered when creating a subscription. ROS 2 calls this function automatically whenever a message arrives on the subscribed topic. This enables event-driven programming—you don\'t need to poll for messages.',
+      hint: 'Look at the subscriber example—which function did we pass to create_subscription()?'
+    },
+    {
+      id: 'q6',
+      question: 'Which QoS reliability setting should you use for high-frequency camera images (30 Hz) where only the latest frame matters?',
+      options: [
+        'RELIABLE - Guarantee every frame is delivered',
+        'BEST_EFFORT - Send and forget, prioritize low latency',
+      ],
+      correctAnswer: 1,
+      explanation: 'BEST_EFFORT is optimal for high-frequency sensor data like camera images. Since only the latest frame matters for real-time processing, dropped frames are acceptable. RELIABLE would introduce latency from retransmissions and buffer bloat. Use RELIABLE for critical commands (e.g., motor control).',
+      hint: 'Review the "Quality of Service (QoS)" section—what did we recommend for camera images?'
+    }
+  ]}
+/>
+
+---
+
+## Further Reading
+
+### Official ROS 2 Documentation
+- [Understanding ROS 2 Nodes](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Nodes/Understanding-ROS2-Nodes.html)
+- [Understanding ROS 2 Topics](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html)
+- [Writing a Simple Publisher and Subscriber (Python)](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Writing-A-Simple-Py-Publisher-And-Subscriber.html)
+- [About Quality of Service Settings](https://docs.ros.org/en/humble/Concepts/About-Quality-of-Service-Settings.html)
+
+### ROS 2 Message References
+- [std_msgs Package](https://docs.ros.org/en/humble/p/std_msgs/interfaces.html) - Basic message types
+- [sensor_msgs Package](https://docs.ros.org/en/humble/p/sensor_msgs/interfaces.html) - Sensor data messages
+- [geometry_msgs Package](https://docs.ros.org/en/humble/p/geometry_msgs/interfaces.html) - Geometric primitives
+
+### Tools
+- [rqt_graph User Guide](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html#rqt-graph) - Visualize node graphs
+- [ros2 topic CLI Reference](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html#ros2-topic-list) - Command-line topic inspection
+
+### Design Patterns
+- [ROS 2 Design: Topic and Service Names](https://design.ros2.org/articles/topic_and_service_names.html)
+- [ROS 2 Design: Quality of Service](https://design.ros2.org/articles/qos.html)
+
+---
+
+## What's Next?
+
+In **Chapter 3: ROS 2 Services and Actions**, you'll learn about request-response communication patterns (services) and long-running tasks with feedback (actions). We'll build on the pub/sub foundation to handle interactions like "open the door" (service) and "navigate to the kitchen" (action).
+
+**Preview Question**: If topics are like radio broadcasts, what real-world analogy would fit services (request-response)?
+
+:::tip Preparation for Chapter 3
+Before the next chapter, experiment with the `ros2 service` command-line tools:
+```bash
+ros2 service list
+ros2 service type /service_name
+ros2 service call /service_name [args]
+```
+:::
+
+---
+
+**License**: Creative Commons BY-SA 4.0
+**Last Updated**: 2025-12-05
+**ROS Version**: ROS 2 Humble

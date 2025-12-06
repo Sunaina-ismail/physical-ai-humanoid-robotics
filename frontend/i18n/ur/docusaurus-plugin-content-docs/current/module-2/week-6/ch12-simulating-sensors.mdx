@@ -1,0 +1,247 @@
+---
+sidebar_position: 12
+title: "باب 12: سینسرز کی سیمولیشن (Simulating Sensors)"
+description: "گیزبو میں مختلف روبوٹ سینسرز کی سیمولیشن سیکھیں، بشمول کیمرے، لیڈار، IMU، اور فورس/ٹورک سینسرز برائے حقیقی روبوٹ ادراک۔"
+tags: [gazebo, sensors, simulation, perception, robotics]
+tier: A
+prerequisites: ["ماڈیول 1: ROS 2 کی بنیاد", "ماڈیول 1: TF2 ٹرانسفارم", "ماڈیول 1: URDF روبوٹ ماڈلز"]
+learning_outcomes: ["روبوٹکس سیمولیشن میں مختلف سینسر ٹائپس کو سمجھنا", "گیزبو میں کیمرہ، لیڈار، IMU، اور فورس/ٹورک سینسرز تشکیل دینا", "ROS 2 نوڈس میں سینسر ڈیٹا عمل کرنا"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# باب 12: سینسرز کی سیمولیشن
+
+## تعارف
+
+روبوٹکس میں، سینسرز خودکار سسٹمز کی آنکھیں اور کان ہیں۔ وہ روبوٹ کے ماحول اور اندرونی حالت کے بارے میں اہم معلومات فراہم کرتے ہیں۔ سیمولیشن میں، ان سینسرز کی درست ماڈلنگ اہم ہے تاکہ مضبوط ادراک الگورتھم ترقی دیے جا سکیں جو حقیقی روبوٹس پر منتقل کیے جا سکیں۔ یہ باب گیزبو میں مختلف سینسر ٹائپس کی سیمولیشن کا طریقہ تلاش کرتا ہے، بنیادی کیمرے سے لے کر پیچیدہ لیڈار اریز تک۔
+
+## سیکھنے کے اہداف
+
+اس باب کے اختتام تک، آپ کو اس بات کا اہل ہو جانا چاہیے:
+
+- گیزبو سیمولیشن میں مختلف سینسر ٹائپس تشکیل دینا
+- سینسر سیمولیشن کے پیچھے فزکس کو سمجھنا
+- ROS 2 نوڈس میں سینسر ڈیٹا عمل کرنا
+- سیمولیٹیڈ ماحول میں سینسر کارکردگی کی توثیق کرنا
+
+## شرائطِ لازمہ
+
+اس باب کا آغاز کرنے سے پہلے، یقین کر لیں کہ آپ کے پاس ہے:
+
+- ماڈیول 1 مکمل (ROS 2 کی بنیاد، TF2، URDF)
+- روبوٹ ادراک تصورات کی بنیادی سمجھ
+- ROS 2 لانچ فائلز اور پیرامیٹر تشکیل کا تجربہ
+
+## حقیقی دنیا کی مثلاً: روبوٹ کے حواس
+
+سینسر سیمولیشن کو ایک ویڈیو گیم کے کردار کے لیے ایک ورچوئل انسانی جسم تیار کرنے کی طرح سوچیں۔ جس طرح ایک گیم کے کردار کو آنکھوں (کیمرے)، کانوں (مائیکروفونز)، جلد (ٹیکٹائل سینسرز)، اور توازن کا احساس (IMU) کی ضرورت ہوتی ہے، اسی طرح ایک روبوٹ کو اپنے ماحول کو سمجھنے کے لیے مختلف سینسرز کی ضرورت ہوتی ہے۔ گیم انجن سیمولیٹ کرتا ہے کہ کیسے روشنی کردار کی آنکھوں پر مار ہوتی ہے، کیسے آواز کی لہریں ان کے کانوں تک پہنچتی ہیں، اور کیسے وہ چھوٹ کا احساس کرتے ہیں - گیزبو روبوٹس کے لیے بھی یہی کرتا ہے۔
+
+## بنیادی تصورات
+
+### 1. روبوٹکس میں سینسر ٹائپس
+
+روبوٹس عام طور پر متعدد اقسام کے سینسرز استعمال کرتے ہیں:
+
+- **کیمرے**: اشیاء کی شناخت اور نیویگیشن کے لیے بصری ادراک
+- **لیڈار**: لیزر رینجنگ کا استعمال کرتے ہوئے 3D میپنگ اور رکاوٹ کا پتہ لگانا
+- **IMU**: جہت اور تیزی کے لیے ادراک پیمائش
+- **فورس/ٹورک**: مینیپولیشن کے لیے جسمانی تعامل کا احساس
+- **GPS**: کھلے ماحول میں عالمی مقام کی وضاحت
+- **اینکوڈرز**: جوائنٹ کی پوزیشن اور رفتار کا فیڈ بیک
+
+### 2. گیزبو سینسر پلگ انز
+
+گیزبو سینسر پلگ انز فراہم کرتا ہے جو حقیقی سینسر رویے کی نقل کرتے ہیں:
+
+```xml
+<!-- URDF میں کیمرہ سینسر کی مثال -->
+<gazebo reference="camera_link">
+  <sensor type="camera" name="camera1">
+    <update_rate>30.0</update_rate>
+    <camera name="head">
+      <horizontal_fov>1.3962634</horizontal_fov>
+      <image>
+        <width>800</width>
+        <height>600</height>
+        <format>R8G8B8</format>
+      </image>
+      <clip>
+        <near>0.1</near>
+        <far>100</far>
+      </clip>
+    </camera>
+    <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+      <frame_name>camera_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+```
+
+### 3. سینسر کی درستگی اور نقل و حمل
+
+سیمولیٹیڈ سینسرز کو حقیقی سینسر کے خصوصیات کو نقل کرنا چاہیے:
+
+| سینسر ٹائپ | حقیقی خصوصیات | سیمولیٹیڈ نقل و حمل |
+|------------|----------------|----------------------|
+| کیمرہ | نوائز، لینس ڈسٹورشن، فوکس | نوائز میڈل، ڈسٹورشن ماڈل، فوکس ایفیکٹس |
+| لیڈار | اسکیننگ فریکوئنسی، رینج ایرر | اسکیننگ فریکوئنسی، رینج نوائز |
+| IMU | بیس، ڈریفٹ، نوائز | بیس ماڈل، ڈریفٹ الگورتھم، نوائز جنریشن |
+| فورس/ٹورک | حساسیت، ریزولوشن | حساسیت ماڈل، نوائز |
+
+---
+
+## کیمرہ سینسرز کی سیمولیشن
+
+کیمرہ سینسرز بصری ادراک کے لیے اہم ہیں:
+
+```python
+#!/usr/bin/env python3
+# کیمرہ ڈیٹا کو سبسکرائب کرنے کے لیے ROS 2 نوڈ
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+
+class CameraSubscriber(Node):
+    def __init__(self):
+        super().__init__('camera_subscriber')
+        self.subscription = self.create_subscription(
+            Image,
+            '/camera/image_raw',
+            self.listener_callback,
+            10)
+        self.subscription  # اس سے وارننگ کو روکا جاتا ہے
+        self.br = CvBridge()
+
+    def listener_callback(self, msg):
+        self.get_logger().info('کیمرہ فریم موصول ہوا')
+        current_frame = self.br.imgmsg_to_cv2(msg)
+        cv2.imshow("کیمرہ فیڈ", current_frame)
+        cv2.waitKey(1)
+
+def main(args=None):
+    rclpy.init(args=args)
+    camera_subscriber = CameraSubscriber()
+    rclpy.spin(camera_subscriber)
+    camera_subscriber.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### کیمرہ کی تشکیل کے اہم پیرامیٹر:
+
+- `horizontal_fov`: افقی دیکھنے کا زاویہ
+- `image.width` اور `image.height`: تصویر کا سائز
+- `update_rate`: فریم کی شرح
+- `clip.near` اور `clip.far`: قریب اور دور کا کلپنگ فاصلہ
+
+---
+
+## لیڈار سینسرز کی سیمولیشن
+
+لیڈار سینسرز 3D میپنگ اور نیویگیشن کے لیے استعمال ہوتے ہیں:
+
+```xml
+<!-- URDF میں لیڈار سینسر کی مثال -->
+<gazebo reference="lidar_link">
+  <sensor type="ray" name="lidar_sensor">
+    <ray>
+      <scan>
+        <horizontal>
+          <samples>720</samples>
+          <resolution>1</resolution>
+          <min_angle>-1.570796</min_angle>
+          <max_angle>1.570796</max_angle>
+        </horizontal>
+      </scan>
+      <range>
+        <min>0.1</min>
+        <max>30.0</max>
+        <resolution>0.01</resolution>
+      </range>
+    </ray>
+    <plugin name="lidar_controller" filename="libgazebo_ros_ray_sensor.so">
+      <topic_name>/scan</topic_name>
+      <frame_name>lidar_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+```
+
+---
+
+## IMU سینسرز کی سیمولیشن
+
+IMU سینسرز روبوٹ کی جہت اور تیزی کا پتہ لگاتے ہیں:
+
+```xml
+<!-- URDF میں IMU سینسر کی مثال -->
+<gazebo reference="imu_link">
+  <sensor type="imu" name="imu_sensor">
+    <always_on>true</always_on>
+    <update_rate>100</update_rate>
+    <imu>
+      <angular_velocity>
+        <x>
+          <noise type="gaussian">
+            <mean>0.0</mean>
+            <stddev>0.001</stddev>
+          </noise>
+        </x>
+        <y>
+          <noise type="gaussian">
+            <mean>0.0</mean>
+            <stddev>0.001</stddev>
+          </noise>
+        </y>
+        <z>
+          <noise type="gaussian">
+            <mean>0.0</mean>
+            <stddev>0.001</stddev>
+          </noise>
+        </z>
+      </angular_velocity>
+    </imu>
+    <plugin name="imu_controller" filename="libgazebo_ros_imu.so">
+      <topic_name>/imu/data</topic_name>
+      <frame_name>imu_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+```
+
+---
+
+## مشق
+
+**سینسر کی قسم کا انتخاب**: ایک مشن کا خیال کریں جہاں ایک روبوٹ کو کم روشنی کے ماحول میں نیویگیٹ کرنا ہے۔ کون سے سینسرز سب سے زیادہ مفید ہوں گے اور کیوں؟
+
+1. **کیمرہ**: کم روشنی میں کم مؤثر
+2. **لیڈار**: ہمیشہ کام کرتا ہے، لیکن تفصیل کم
+3. **IR سینسر**: کم روشنی میں مؤثر
+4. **سونار**: نیویگیشن کے لیے بنیادی
+
+<Quiz
+  title="سینسرز کی سیمولیشن"
+  questions={[
+    {
+      question: "گیزبو میں کون سا سینسر ٹائپ 3D میپنگ کے لیے استعمال ہوتا ہے؟",
+      options: ["کیمرہ", "لیڈار", "IMU", "سونار"],
+      answer: 1,
+      explanation: "لیڈار 3D میپنگ اور رکاوٹ کے پتہ لگانے کے لیے لیزر رینجنگ استعمال کرتا ہے"
+    },
+    {
+      question: "IMU کا مطلب کیا ہے؟",
+      options: ["انریل میکنکل یونٹ", "انریل موشن یونٹ", "انریل میزورمینٹ یونٹ", "انریل موشن یوکلیڈ"],
+      answer: 2,
+      explanation: "IMU انریل میزورمینٹ یونٹ کا مختصر ہے جو جہت اور تیزی کا پتہ لگاتا ہے"
+    }
+  ]}
+/>

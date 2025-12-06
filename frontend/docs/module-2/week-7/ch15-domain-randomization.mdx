@@ -1,0 +1,971 @@
+---
+sidebar_position: 15
+title: "Chapter 15: Domain Randomization"
+description: "Master domain randomization techniques to create robust AI models that generalize from simulation to reality in robotics applications."
+tags: [domain-randomization, sim2real, ai, machine-learning, robotics, transfer-learning]
+tier: C
+prerequisites: ["Module 1: ROS 2 Fundamentals", "Module 2: Isaac Sim Essentials", "Basic understanding of machine learning"]
+learning_outcomes: ["Implement domain randomization techniques", "Create robust AI models for sim-to-real transfer", "Apply randomization to physics, rendering, and sensor parameters", "Validate model performance across domains"]
+---
+
+# Chapter 15: Domain Randomization
+
+## Introduction
+
+Domain randomization is a powerful technique in robotics and AI that addresses the "reality gap" - the challenge of transferring models trained in simulation to real-world applications. By systematically varying environmental conditions, physics parameters, and sensor characteristics during training, domain randomization creates AI models that are robust to the differences between simulation and reality. This chapter explores how to implement domain randomization in robotics simulation environments.
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+- Understand the principles of domain randomization
+- Implement randomization techniques for physics parameters
+- Apply rendering domain randomization
+- Create sensor domain randomization for robust perception
+- Evaluate sim-to-real transfer performance
+
+## Prerequisites
+
+Before starting this chapter, ensure you have:
+- Completed Module 1 (ROS 2 fundamentals)
+- Module 2 Chapters 12-14 (simulation, Isaac Sim, GPU rendering)
+- Basic understanding of machine learning concepts
+- Experience with robotics simulation environments
+
+## Real-World Analogy: Teaching a Child in Multiple Environments
+
+Domain randomization is like teaching a child to recognize a cat not just in your living room, but in different lighting conditions, from different angles, in various environments (park, car, friend's house), with different cat breeds, and in different poses. If you only show the child cats in your living room, they might not recognize a cat outside. Similarly, training robots in a single simulation environment creates models that fail when transferred to the real world. Domain randomization shows the AI multiple "versions" of reality to build robust understanding.
+
+## Core Concepts
+
+### 1. The Reality Gap Problem
+
+The reality gap refers to differences between simulation and reality that cause models trained in simulation to fail in real-world deployment:
+- Visual differences: lighting, textures, colors
+- Physics differences: friction, dynamics, contact models
+- Sensor differences: noise, resolution, calibration
+- Environmental differences: layouts, objects, conditions
+
+### 2. Domain Randomization Strategy
+
+Domain randomization addresses the reality gap by:
+- Randomizing simulation parameters during training
+- Creating diverse training environments
+- Building robust models insensitive to domain differences
+- Improving sim-to-real transfer capabilities
+
+### 3. Types of Randomization
+
+- **Visual Randomization**: Lighting, textures, colors, camera parameters
+- **Physics Randomization**: Friction, mass, damping, restitution
+- **Sensor Randomization**: Noise, resolution, calibration parameters
+- **Environmental Randomization**: Object placement, layouts, dynamics
+
+## Physics Domain Randomization
+
+### Randomizing Physical Properties
+
+```python
+# Physics domain randomization implementation
+import numpy as np
+import random
+from omni.isaac.core.utils.prims import get_prim_at_path
+from pxr import UsdPhysics
+
+class PhysicsDomainRandomizer:
+    def __init__(self, world):
+        self.world = world
+        self.randomization_ranges = {
+            'friction': (0.1, 1.0),           # Static and dynamic friction
+            'restitution': (0.0, 0.8),        # Bounciness (0 = no bounce, 1 = fully bouncy)
+            'mass_multiplier': (0.5, 2.0),    # Mass variation
+            'damping': (0.0, 10.0),           # Joint damping
+            'stiffness': (100, 10000)         # Joint stiffness
+        }
+
+    def randomize_physics_properties(self, prim_path):
+        """Randomize physics properties for a given prim"""
+        prim = get_prim_at_path(prim_path)
+
+        # Randomize friction
+        static_friction = np.random.uniform(
+            self.randomization_ranges['friction'][0],
+            self.randomization_ranges['friction'][1]
+        )
+        dynamic_friction = np.random.uniform(
+            self.randomization_ranges['friction'][0],
+            self.randomization_ranges['friction'][1]
+        )
+
+        # Randomize restitution (bounciness)
+        restitution = np.random.uniform(
+            self.randomization_ranges['restitution'][0],
+            self.randomization_ranges['restitution'][1]
+        )
+
+        # Apply physics properties
+        physics_api = UsdPhysics.RigidBodyAPI(prim)
+        if physics_api:
+            physics_api.CreateFrictionAttr().Set((static_friction + dynamic_friction) / 2)
+            physics_api.CreateRestitutionAttr().Set(restitution)
+
+    def randomize_robot_dynamics(self, robot_prim_path):
+        """Randomize robot joint dynamics"""
+        # Get robot joints and randomize their properties
+        joint_names = self._get_robot_joints(robot_prim_path)
+
+        for joint_name in joint_names:
+            joint_prim = get_prim_at_path(f"{robot_prim_path}/{joint_name}")
+
+            # Randomize joint properties
+            damping = np.random.uniform(
+                self.randomization_ranges['damping'][0],
+                self.randomization_ranges['damping'][1]
+            )
+            stiffness = np.random.uniform(
+                self.randomization_ranges['stiffness'][0],
+                self.randomization_ranges['stiffness'][1]
+            )
+
+            joint_api = UsdPhysics.JointAPI(joint_prim)
+            if joint_api:
+                joint_api.CreatePhysicsDampingAttr(damping)
+                joint_api.CreatePhysicsStiffnessAttr(stiffness)
+
+    def _get_robot_joints(self, robot_prim_path):
+        """Get list of robot joint names"""
+        # This would typically parse the robot's URDF/USD to find joints
+        # For this example, we'll return a mock list
+        return ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+
+    def apply_randomization_cycle(self):
+        """Apply randomization at regular intervals during training"""
+        # Get all physics-enabled objects in the scene
+        physics_objects = self._get_physics_objects()
+
+        for obj_path in physics_objects:
+            self.randomize_physics_properties(obj_path)
+
+        # Randomize robot dynamics
+        robot = self.world.scene.get_object("sim_robot")
+        if robot:
+            self.randomize_robot_dynamics(robot.prim_path)
+
+    def _get_physics_objects(self):
+        """Get list of all physics-enabled objects in the scene"""
+        # In practice, this would query the USD stage for physics-enabled prims
+        # For this example, return a mock list
+        return [
+            "/World/Object_0",
+            "/World/Object_1",
+            "/World/Object_2",
+            "/World/Floor"
+        ]
+
+# Usage example
+physics_randomizer = PhysicsDomainRandomizer(world)
+```
+
+### Mass and Inertia Randomization
+
+```python
+# Randomizing mass and inertia properties
+def randomize_mass_properties(prim_path, base_mass=None):
+    """Randomize mass and inertia properties of an object"""
+    from pxr import Gf
+
+    # Get the base mass if not provided
+    if base_mass is None:
+        # In practice, you'd get this from the original object definition
+        base_mass = 1.0  # Default mass
+
+    # Apply random multiplier
+    mass_multiplier = np.random.uniform(0.5, 2.0)
+    randomized_mass = base_mass * mass_multiplier
+
+    # Randomize inertia tensor (simplified approach)
+    # In reality, this would depend on the object's shape and mass distribution
+    scale_factor = mass_multiplier ** (1/3)  # Scale roughly with cube root of mass
+    randomized_inertia = np.array([
+        [0.4 * randomized_mass * scale_factor**2, 0, 0],
+        [0, 0.4 * randomized_mass * scale_factor**2, 0],
+        [0, 0, 0.4 * randomized_mass * scale_factor**2]
+    ])
+
+    # Apply to prim (this is a simplified representation)
+    # In practice, you'd use the Isaac Sim API to set mass properties
+    print(f"Randomized mass for {prim_path}: {randomized_mass:.3f}kg")
+    print(f"Randomized inertia: {randomized_inertia}")
+
+# Apply to multiple objects
+def randomize_scene_masses():
+    """Randomize masses for all objects in the scene"""
+    objects = ["/World/Object_0", "/World/Object_1", "/World/Object_2"]
+
+    for obj in objects:
+        randomize_mass_properties(obj)
+```
+
+## Visual Domain Randomization
+
+### Texture and Material Randomization
+
+```python
+# Visual domain randomization for rendering
+from omni.isaac.core.materials import VisualizationMaterial
+import colorsys
+
+class VisualDomainRandomizer:
+    def __init__(self):
+        self.color_ranges = {
+            'hue': (0.0, 1.0),           # Full color spectrum
+            'saturation': (0.3, 1.0),    # Avoid washed-out colors
+            'value': (0.4, 1.0)          # Avoid very dark colors
+        }
+
+        self.material_properties = {
+            'roughness': (0.0, 1.0),     # From smooth to rough
+            'metallic': (0.0, 1.0),      # From non-metallic to metallic
+            'clearcoat': (0.0, 1.0),     # Additional coating effect
+            'opacity': (0.8, 1.0)        # Mostly opaque
+        }
+
+    def randomize_material_color(self, material_prim_path):
+        """Randomize the color of a material"""
+        # Generate random HSV values
+        hue = np.random.uniform(self.color_ranges['hue'][0], self.color_ranges['hue'][1])
+        saturation = np.random.uniform(self.color_ranges['saturation'][0], self.color_ranges['saturation'][1])
+        value = np.random.uniform(self.color_ranges['value'][0], self.color_ranges['value'][1])
+
+        # Convert HSV to RGB
+        rgb = colorsys.hsv_to_rgb(hue, saturation, value)
+
+        # Create material with random color
+        material = VisualizationMaterial(
+            prim_path=material_prim_path,
+            diffuse_color=np.array(rgb),
+            specular_color=np.array([0.5, 0.5, 0.5]),
+            metallic_factor=np.random.uniform(self.material_properties['metallic'][0],
+                                            self.material_properties['metallic'][1]),
+            roughness_factor=np.random.uniform(self.material_properties['roughness'][0],
+                                             self.material_properties['roughness'][1]),
+            clearcoat_factor=np.random.uniform(self.material_properties['clearcoat'][0],
+                                             self.material_properties['clearcoat'][1]),
+            opacity=np.random.uniform(self.material_properties['opacity'][0],
+                                    self.material_properties['opacity'][1])
+        )
+
+        return material
+
+    def randomize_texture_properties(self, texture_path):
+        """Randomize texture properties like brightness, contrast, saturation"""
+        # In practice, this would modify texture parameters in the material
+        texture_params = {
+            'brightness': np.random.uniform(-0.2, 0.2),    # ±20% brightness
+            'contrast': np.random.uniform(0.8, 1.2),       # 80-120% contrast
+            'saturation': np.random.uniform(0.5, 1.5),     # 50-150% saturation
+            'hue_shift': np.random.uniform(-0.1, 0.1)      # ±10% hue shift
+        }
+
+        return texture_params
+
+    def randomize_environment_lighting(self):
+        """Randomize environment lighting conditions"""
+        lighting_params = {
+            'intensity': np.random.uniform(500, 2000),     # Light intensity range
+            'color_temperature': np.random.uniform(4000, 8000),  # Kelvin (warm to cool)
+            'direction': np.random.uniform(-1, 1, 3),      # Light direction vector
+            'shadow_softness': np.random.uniform(0.1, 0.8) # Shadow softness
+        }
+
+        return lighting_params
+
+    def apply_visual_randomization(self, object_prim_path):
+        """Apply visual randomization to an object"""
+        # Create unique material path for this randomization
+        material_path = f"{object_prim_path}_material_{np.random.randint(1000, 9999)}"
+
+        # Randomize material
+        material = self.randomize_material_color(material_path)
+
+        # Apply material to object
+        material.apply(object_prim_path)
+
+        return material
+
+# Usage example
+visual_randomizer = VisualDomainRandomizer()
+```
+
+### Camera and Rendering Randomization
+
+```python
+# Camera domain randomization
+class CameraDomainRandomizer:
+    def __init__(self):
+        self.camera_params = {
+            'focal_length': (18.0, 50.0),          # mm focal length
+            'focus_distance': (0.5, 10.0),         # meters
+            'aperture': (1.4, 16.0),               # f-stop
+            'iso': (100, 1600),                    # ISO sensitivity
+            'shutter_speed': (1/1000, 1/30),       # seconds
+            'distortion_k1': (-0.5, 0.5),          # Radial distortion
+            'distortion_k2': (-0.5, 0.5),          # Radial distortion
+            'distortion_p1': (-0.1, 0.1),          # Tangential distortion
+            'distortion_p2': (-0.1, 0.1)           # Tangential distortion
+        }
+
+    def randomize_camera_parameters(self, camera):
+        """Randomize camera intrinsic and extrinsic parameters"""
+        # Randomize intrinsic parameters
+        focal_length = np.random.uniform(
+            self.camera_params['focal_length'][0],
+            self.camera_params['focal_length'][1]
+        )
+
+        focus_distance = np.random.uniform(
+            self.camera_params['focus_distance'][0],
+            self.camera_params['focus_distance'][1]
+        )
+
+        # Apply parameters to camera
+        camera.focal_length = focal_length
+        camera.focus_distance = focus_distance
+
+        # Randomize distortion parameters
+        distortion_params = {
+            'k1': np.random.uniform(self.camera_params['distortion_k1'][0],
+                                  self.camera_params['distortion_k1'][1]),
+            'k2': np.random.uniform(self.camera_params['distortion_k2'][0],
+                                  self.camera_params['distortion_k2'][1]),
+            'p1': np.random.uniform(self.camera_params['distortion_p1'][0],
+                                  self.camera_params['distortion_p1'][1]),
+            'p2': np.random.uniform(self.camera_params['distortion_p2'][0],
+                                  self.camera_params['distortion_p2'][1])
+        }
+
+        return distortion_params
+
+    def add_realistic_camera_noise(self, image):
+        """Add realistic camera noise to simulate real sensor characteristics"""
+        # Add different types of noise
+        height, width, channels = image.shape
+
+        # Photon shot noise (signal-dependent)
+        signal_noise = np.random.poisson(image * 255) / 255.0
+
+        # Read noise (signal-independent)
+        read_noise = np.random.normal(0, 0.01, image.shape)
+
+        # Pattern noise (fixed pattern)
+        pattern_noise = np.random.uniform(-0.005, 0.005, (height, 1, channels))
+        pattern_noise = np.tile(pattern_noise, (1, width, 1))
+
+        # Combine noises
+        noisy_image = image + signal_noise + read_noise + pattern_noise
+
+        return np.clip(noisy_image, 0, 1)
+
+# Usage example
+camera_randomizer = CameraDomainRandomizer()
+```
+
+## Sensor Domain Randomization
+
+### LIDAR Randomization
+
+```python
+# LIDAR domain randomization for robust perception
+class LidarDomainRandomizer:
+    def __init__(self):
+        self.lidar_params = {
+            'range_accuracy': (0.01, 0.1),         # meters
+            'angular_resolution': (0.1, 2.0),      # degrees
+            'intensity_accuracy': (0.05, 0.2),     # intensity units
+            'dropout_rate': (0.001, 0.05),         # probability of missed detection
+            'motion_blur_factor': (0.0, 0.1),      # motion-induced errors
+            'multi_path_interference': (0.0, 0.05) # multi-path effects
+        }
+
+    def randomize_lidar_characteristics(self, lidar_sensor):
+        """Randomize LIDAR sensor characteristics"""
+        # Randomize accuracy parameters
+        range_noise_std = np.random.uniform(
+            self.lidar_params['range_accuracy'][0],
+            self.lidar_params['range_accuracy'][1]
+        )
+
+        dropout_rate = np.random.uniform(
+            self.lidar_params['dropout_rate'][0],
+            self.lidar_params['dropout_rate'][1]
+        )
+
+        return {
+            'range_noise_std': range_noise_std,
+            'dropout_rate': dropout_rate,
+            'angular_resolution': np.random.uniform(
+                self.lidar_params['angular_resolution'][0],
+                self.lidar_params['angular_resolution'][1]
+            ),
+            'motion_blur_factor': np.random.uniform(
+                self.lidar_params['motion_blur_factor'][0],
+                self.lidar_params['motion_blur_factor'][1]
+            )
+        }
+
+    def apply_lidar_noise(self, scan_data, params):
+        """Apply realistic LIDAR noise and artifacts"""
+        # Add range-dependent noise
+        distances = scan_data.copy()
+        noise_std = params['range_noise_std'] * (1 + 0.1 * distances)  # Noise increases with distance
+        range_noise = np.random.normal(0, noise_std, distances.shape)
+        noisy_distances = distances + range_noise
+
+        # Apply dropout (missed detections)
+        dropout_mask = np.random.random(distances.shape) < params['dropout_rate']
+        noisy_distances[dropout_mask] = float('inf')  # Set to max range for missed detections
+
+        # Apply angular resolution effects (simplified)
+        # In reality, this would affect the discretization of the scan
+
+        return np.maximum(noisy_distances, 0.05)  # Ensure minimum distance
+
+# Usage example
+lidar_randomizer = LidarDomainRandomizer()
+```
+
+## Environmental Domain Randomization
+
+### Scene Layout Randomization
+
+```python
+# Environmental domain randomization
+class EnvironmentDomainRandomizer:
+    def __init__(self, world):
+        self.world = world
+        self.object_placement = {
+            'position_jitter': 0.1,        # meters
+            'rotation_jitter': 0.1,        # radians
+            'object_count_range': (5, 20), # number of objects
+            'object_size_range': (0.05, 0.5)  # meters
+        }
+
+    def randomize_object_positions(self, object_list):
+        """Randomize positions of objects in the scene"""
+        for obj_path in object_list:
+            # Get current position
+            # In practice, you'd get the current position from the simulation
+            current_pos = np.array([0.0, 0.0, 0.1])  # Default position
+
+            # Add random jitter
+            jitter = np.random.uniform(
+                -self.object_placement['position_jitter'],
+                self.object_placement['position_jitter'],
+                size=3
+            )
+
+            new_pos = current_pos + jitter
+
+            # Apply new position (in practice, use Isaac Sim API)
+            print(f"Moving {obj_path} from {current_pos} to {new_pos}")
+
+    def randomize_scene_layout(self):
+        """Randomize the entire scene layout"""
+        # Remove existing objects
+        self._clear_scene_objects()
+
+        # Generate new random objects
+        num_objects = np.random.randint(
+            self.object_placement['object_count_range'][0],
+            self.object_placement['object_count_range'][1]
+        )
+
+        for i in range(num_objects):
+            # Random position in a defined area
+            x = np.random.uniform(-5, 5)
+            y = np.random.uniform(-5, 5)
+            z = np.random.uniform(0.1, 2)  # Height above ground
+
+            # Random object type and size
+            obj_type = np.random.choice(['box', 'sphere', 'cylinder'])
+            size = np.random.uniform(
+                self.object_placement['object_size_range'][0],
+                self.object_placement['object_size_range'][1]
+            )
+
+            # Create object with random properties
+            self._create_random_object(
+                prim_path=f"/World/RandomObject_{i}",
+                obj_type=obj_type,
+                position=[x, y, z],
+                size=size
+            )
+
+    def _clear_scene_objects(self):
+        """Clear existing random objects from scene"""
+        # Implementation would remove objects created during randomization
+        pass
+
+    def _create_random_object(self, prim_path, obj_type, position, size):
+        """Create a random object in the scene"""
+        from omni.isaac.core.utils.prims import create_primitive
+
+        if obj_type == 'box':
+            create_primitive(
+                prim_path=prim_path,
+                primitive_type="Cuboid",
+                primitive_props={
+                    "size": [size, size, size],
+                    "position": position,
+                }
+            )
+        elif obj_type == 'sphere':
+            create_primitive(
+                prim_path=prim_path,
+                primitive_type="Sphere",
+                primitive_props={
+                    "radius": size,
+                    "position": [position[0], position[1], position[2] + size],  # Adjust for radius
+                }
+            )
+        else:  # cylinder
+            create_primitive(
+                prim_path=prim_path,
+                primitive_type="Cylinder",
+                primitive_props={
+                    "radius": size * 0.7,
+                    "height": size * 2,
+                    "position": [position[0], position[1], position[2] + size],  # Adjust for height
+                }
+            )
+
+# Usage example
+env_randomizer = EnvironmentDomainRandomizer(world)
+```
+
+## Complete Domain Randomization System
+
+### Unified Randomization Manager
+
+```python
+# Complete domain randomization system
+import time
+from omni.isaac.core.utils.stage import get_current_stage
+
+class DomainRandomizationManager:
+    def __init__(self, world):
+        self.world = world
+        self.physics_randomizer = PhysicsDomainRandomizer(world)
+        self.visual_randomizer = VisualDomainRandomizer()
+        self.camera_randomizer = CameraDomainRandomizer()
+        self.lidar_randomizer = LidarDomainRandomizer()
+        self.env_randomizer = EnvironmentDomainRandomizer(world)
+
+        # Randomization schedule
+        self.randomization_schedule = {
+            'physics': {'interval': 50, 'enabled': True},      # Every 50 steps
+            'visual': {'interval': 100, 'enabled': True},      # Every 100 steps
+            'environment': {'interval': 200, 'enabled': True}  # Every 200 steps
+        }
+
+        self.step_count = 0
+
+    def apply_domain_randomization(self):
+        """Apply domain randomization based on schedule"""
+        self.step_count += 1
+
+        # Apply physics randomization
+        if (self.randomization_schedule['physics']['enabled'] and
+            self.step_count % self.randomization_schedule['physics']['interval'] == 0):
+            self.physics_randomizer.apply_randomization_cycle()
+            print(f"Applied physics randomization at step {self.step_count}")
+
+        # Apply visual randomization
+        if (self.randomization_schedule['visual']['enabled'] and
+            self.step_count % self.randomization_schedule['visual']['interval'] == 0):
+            self._apply_visual_randomization()
+            print(f"Applied visual randomization at step {self.step_count}")
+
+        # Apply environment randomization
+        if (self.randomization_schedule['environment']['enabled'] and
+            self.step_count % self.randomization_schedule['environment']['interval'] == 0):
+            self.env_randomizer.randomize_scene_layout()
+            print(f"Applied environment randomization at step {self.step_count}")
+
+    def _apply_visual_randomization(self):
+        """Apply visual randomization to scene objects"""
+        # Randomize lighting
+        lighting_params = self.visual_randomizer.randomize_environment_lighting()
+
+        # In practice, apply these parameters to the scene lighting
+        print(f"Applied lighting randomization: {lighting_params}")
+
+        # Randomize materials for some objects
+        scene_objects = self._get_scene_objects()
+        for obj_path in scene_objects[:5]:  # Randomize first 5 objects
+            self.visual_randomizer.apply_visual_randomization(obj_path)
+
+    def _get_scene_objects(self):
+        """Get list of objects in the scene for randomization"""
+        # In practice, query the USD stage for objects
+        # This is a simplified example
+        return [
+            "/World/Object_0",
+            "/World/Object_1",
+            "/World/Object_2",
+            "/World/Object_3",
+            "/World/Object_4"
+        ]
+
+    def get_randomization_state(self):
+        """Get current state of randomization for logging"""
+        return {
+            'step_count': self.step_count,
+            'physics_randomized': self.step_count % self.randomization_schedule['physics']['interval'] == 0,
+            'visual_randomized': self.step_count % self.randomization_schedule['visual']['interval'] == 0,
+            'environment_randomized': self.step_count % self.randomization_schedule['environment']['interval'] == 0
+        }
+
+# Usage in training loop
+def training_loop_with_domain_randomization():
+    """Example training loop with domain randomization"""
+    # Initialize world and randomization manager
+    world = World(stage_units_in_meters=1.0)
+    randomizer = DomainRandomizationManager(world)
+
+    # Reset world
+    world.reset()
+
+    # Training loop
+    for episode in range(1000):
+        for step in range(100):  # 100 steps per episode
+            # Apply domain randomization
+            randomizer.apply_domain_randomization()
+
+            # Execute robot actions (simplified)
+            # In practice, this would involve RL training steps
+            world.step(render=True)
+
+            # Get randomization state for logging
+            state = randomizer.get_randomization_state()
+
+            if step % 50 == 0:
+                print(f"Episode {episode}, Step {step}, Randomization State: {state}")
+
+        # Log episode results
+        print(f"Completed episode {episode}")
+
+# Usage
+# training_loop_with_domain_randomization()
+```
+
+## Hands-On Exercise: Domain Randomization for Object Manipulation
+
+Let's create a complete example of domain randomization for a robot manipulation task:
+
+```python
+# Complete domain randomization example for manipulation
+from omni.isaac.core import World
+from omni.isaac.core.robots import Robot
+from omni.isaac.core.utils.prims import create_primitive
+from omni.isaac.core.utils.stage import add_reference_to_stage
+from omni.isaac.sensor import Camera
+import numpy as np
+import carb
+
+class ManipulationDomainRandomization:
+    def __init__(self):
+        # Initialize world
+        self.world = World(stage_units_in_meters=1.0)
+
+        # Setup domain randomization
+        self.randomizer = DomainRandomizationManager(self.world)
+
+        # Setup scene
+        self._setup_manipulation_scene()
+
+        # Setup robot
+        self._setup_manipulator_robot()
+
+        # Setup sensors
+        self._setup_manipulation_sensors()
+
+    def _setup_manipulation_scene(self):
+        """Setup scene for manipulation task"""
+        # Add ground plane
+        self.world.scene.add_default_ground_plane()
+
+        # Create table for manipulation
+        self.table = create_primitive(
+            prim_path="/World/ManipulationTable",
+            primitive_type="Cuboid",
+            primitive_props={
+                "size": [1.0, 0.8, 0.8],
+                "position": [0.5, 0.0, 0.4],
+            },
+            physics_props={"kinematic": True}  # Static table
+        )
+
+    def _setup_manipulator_robot(self):
+        """Setup robot for manipulation"""
+        # For this example, we'll use a simple robot
+        # In practice, you'd import a manipulator robot USD
+        self.robot = self.world.scene.add(
+            Robot(
+                prim_path="/World/Manipulator",
+                name="manipulator_robot",
+                position=np.array([0.0, 0.0, 0.1]),
+                orientation=np.array([0.0, 0.0, 0.0, 1.0])
+            )
+        )
+
+    def _setup_manipulation_sensors(self):
+        """Setup sensors for manipulation task"""
+        # Overhead camera for global view
+        self.overhead_camera = Camera(
+            prim_path="/World/OverheadCamera",
+            position=np.array([0.5, 0.0, 1.5]),
+            frequency=30,
+            resolution=(640, 480)
+        )
+        self.overhead_camera.initialize()
+
+        # Hand camera for close-up view
+        self.hand_camera = Camera(
+            prim_path="/World/Manipulator/HandCamera",
+            position=np.array([0.0, 0.0, 0.1]),
+            frequency=30,
+            resolution=(320, 240)
+        )
+        self.hand_camera.initialize()
+
+    def run_manipulation_training(self, episodes=500):
+        """Run manipulation training with domain randomization"""
+        for episode in range(episodes):
+            # Reset episode
+            self.world.reset()
+
+            # Apply domain randomization for this episode
+            self._setup_episode_randomization(episode)
+
+            # Run episode steps
+            episode_steps = 0
+            max_steps = 200
+
+            while episode_steps < max_steps:
+                # Apply domain randomization based on schedule
+                self.randomizer.apply_randomization_cycle()
+
+                # Execute manipulation actions (simplified)
+                # In practice, this would involve RL policy execution
+                self.world.step(render=True)
+
+                episode_steps += 1
+
+                # Check for task completion (simplified)
+                if episode_steps % 50 == 0:
+                    print(f"Episode {episode}, Step {episode_steps}, Domain randomization active")
+
+            # Log episode results
+            if episode % 50 == 0:
+                print(f"Completed {episode} episodes with domain randomization")
+
+    def _setup_episode_randomization(self, episode_num):
+        """Setup randomization for specific episode"""
+        # Vary object positions on the table
+        self._randomize_object_positions(episode_num)
+
+        # Randomize physics properties
+        self._randomize_physics_properties(episode_num)
+
+        # Randomize visual properties
+        self._randomize_visual_properties(episode_num)
+
+    def _randomize_object_positions(self, episode_num):
+        """Randomize object positions for manipulation"""
+        # Clear existing objects
+        self._clear_manipulation_objects()
+
+        # Create random objects on table
+        num_objects = np.random.randint(1, 4)  # 1-3 objects per episode
+
+        for i in range(num_objects):
+            # Random position on table
+            x = np.random.uniform(0.2, 0.8)   # On table surface
+            y = np.random.uniform(-0.3, 0.3)  # On table surface
+            z = 0.4 + np.random.uniform(0.05, 0.2)  # Above table
+
+            # Random object properties
+            obj_type = np.random.choice(['box', 'sphere', 'cylinder'])
+            size = np.random.uniform(0.05, 0.15)
+            mass = np.random.uniform(0.1, 0.5)
+
+            # Create object
+            obj_prim = create_primitive(
+                prim_path=f"/World/ManipulationObject_{episode_num}_{i}",
+                primitive_type=obj_type,
+                primitive_props={
+                    "size": [size, size, size] if obj_type == 'box' else [2*size, 2*size, 2*size],
+                    "radius": size if obj_type in ['sphere', 'cylinder'] else size,
+                    "height": 2*size if obj_type == 'cylinder' else size,
+                    "position": [x, y, z],
+                },
+                physics_props={
+                    "mass": mass,
+                    "restitution": np.random.uniform(0.0, 0.3),
+                    "static_friction": np.random.uniform(0.3, 0.8),
+                    "dynamic_friction": np.random.uniform(0.2, 0.6)
+                }
+            )
+
+    def _randomize_physics_properties(self, episode_num):
+        """Randomize physics properties for episode"""
+        # In practice, this would randomize various physics parameters
+        # based on the episode number to ensure diversity
+        pass
+
+    def _randomize_visual_properties(self, episode_num):
+        """Randomize visual properties for episode"""
+        # In practice, this would randomize materials, lighting, etc.
+        pass
+
+    def _clear_manipulation_objects(self):
+        """Clear manipulation objects from scene"""
+        # Implementation would remove objects created for manipulation
+        pass
+
+    def cleanup(self):
+        """Clean up the environment"""
+        self.world.clear()
+
+# Usage
+if __name__ == "__main__":
+    manipulator_dr = ManipulationDomainRandomization()
+    try:
+        manipulator_dr.run_manipulation_training(episodes=100)
+    except KeyboardInterrupt:
+        print("Manipulation training interrupted")
+    finally:
+        manipulator_dr.cleanup()
+```
+
+## Evaluation and Validation
+
+### Sim-to-Real Transfer Evaluation
+
+```python
+# Evaluation metrics for domain randomization
+class DomainRandomizationEvaluator:
+    def __init__(self):
+        self.metrics = {
+            'transfer_success_rate': 0.0,
+            'generalization_gap': 0.0,
+            'domain_invariance': 0.0,
+            'robustness_score': 0.0
+        }
+
+    def evaluate_transfer_performance(self, sim_model, real_data):
+        """Evaluate how well simulation-trained model performs on real data"""
+        # Simulate performance
+        sim_performance = self._evaluate_on_simulation(sim_model)
+
+        # Real performance
+        real_performance = self._evaluate_on_real_data(sim_model, real_data)
+
+        # Calculate transfer metrics
+        transfer_success_rate = real_performance / sim_performance if sim_performance > 0 else 0
+        generalization_gap = sim_performance - real_performance
+
+        self.metrics['transfer_success_rate'] = transfer_success_rate
+        self.metrics['generalization_gap'] = generalization_gap
+
+        return self.metrics
+
+    def _evaluate_on_simulation(self, model):
+        """Evaluate model performance in simulation"""
+        # Implementation would run model in various simulation conditions
+        # and return performance metric
+        return np.random.uniform(0.8, 1.0)  # Mock performance
+
+    def _evaluate_on_real_data(self, model, real_data):
+        """Evaluate model performance on real-world data"""
+        # Implementation would evaluate model on real-world dataset
+        # and return performance metric
+        return np.random.uniform(0.6, 0.9)  # Mock performance (typically lower than sim)
+
+    def calculate_domain_invariance(self, model, multiple_domains_data):
+        """Calculate how invariant the model is across different domains"""
+        performances = []
+
+        for domain_data in multiple_domains_data:
+            perf = self._evaluate_on_domain(model, domain_data)
+            performances.append(perf)
+
+        # Domain invariance = 1 - std_dev(performances) / mean(performances)
+        mean_perf = np.mean(performances)
+        std_perf = np.std(performances)
+
+        domain_invariance = 1 - (std_perf / mean_perf) if mean_perf > 0 else 0
+
+        self.metrics['domain_invariance'] = domain_invariance
+        return domain_invariance
+
+    def _evaluate_on_domain(self, model, domain_data):
+        """Evaluate model on specific domain data"""
+        # Implementation would evaluate model on specific domain
+        return np.random.uniform(0.5, 1.0)  # Mock performance
+
+# Usage example
+evaluator = DomainRandomizationEvaluator()
+```
+
+## Best Practices
+
+### 1. Graduated Randomization
+- Start with narrow ranges and gradually expand
+- Monitor performance to ensure learning still occurs
+- Balance diversity with task feasibility
+
+### 2. Correlated Randomization
+- Randomize related parameters together (e.g., lighting and colors)
+- Maintain physical plausibility across randomizations
+- Consider real-world correlations in parameter selection
+
+### 3. Validation Strategy
+- Test on a held-out set of real conditions
+- Monitor both simulation and real-world performance
+- Use ablation studies to identify effective randomizations
+
+## Quiz: Domain Randomization
+
+1. What is the "reality gap" in robotics simulation?
+2. Name three types of domain randomization.
+3. Why is it important to randomize physics parameters?
+4. What is the purpose of graduated randomization?
+
+## Hands-On Challenge
+
+Implement domain randomization for a navigation task:
+1. Create a navigation environment with random obstacles
+2. Implement physics randomization for robot dynamics
+3. Add visual randomization for lighting and textures
+4. Evaluate the robustness of a navigation policy
+
+## Summary
+
+This chapter covered domain randomization techniques for robust robotics AI:
+- Physics domain randomization for dynamics variation
+- Visual domain randomization for appearance diversity
+- Sensor domain randomization for perception robustness
+- Environmental randomization for layout diversity
+- Evaluation methods for sim-to-real transfer
+
+## Further Reading
+
+- Domain Randomization Research Papers
+- Sim-to-Real Transfer Techniques
+- NVIDIA Isaac Sim Domain Randomization Guide
+- Reinforcement Learning with Domain Randomization
+
+## Next Module Preview
+
+Module 3 will focus on navigation and mapping, covering SLAM algorithms, path planning, and autonomous navigation systems.

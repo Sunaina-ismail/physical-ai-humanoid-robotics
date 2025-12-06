@@ -1,0 +1,962 @@
+---
+title: "Tier C Extension: VSLAM on Unitree Humanoid Robots"
+chapter_number: "3.1C"
+module: 3
+sidebar_position: 2
+description: "Deploy Visual Simultaneous Localization and Mapping on Unitree humanoid robots with safety-focused motor control patterns."
+prerequisites:
+  - "Module 1: ROS 2 fundamentals"
+  - "Module 2: Digital twin concepts"
+  - "Module 3: Isaac Sim concepts (Tier A content)"
+  - "Basic understanding of VSLAM algorithms (ORB-SLAM, RTAB-MAP)"
+learning_outcomes:
+  - "Configure VSLAM pipeline for Unitree Go2/G1 platform"
+  - "Implement safety-focused motor control with Dead Man Switch patterns"
+  - "Deploy stereo vision-based SLAM on physical humanoid robot"
+  - "Validate sim-to-real transfer of navigation capabilities"
+estimated_time: 180
+tier_support:
+  A: true
+  B: true
+  C: true
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import CodeExample from '@site/src/components/CodeExample';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import TierBadge from '@site/src/components/TierBadge';
+
+# Tier C Extension: VSLAM on Unitree Humanoid Robots
+
+<TierBadge tiers={["C"]} />
+
+## Why This Matters
+
+Deploying Visual Simultaneous Localization and Mapping (VSLAM) on physical humanoid robots represents the critical transition from simulation to real-world operation. Unitree robots like the Go2 and G1 provide excellent platforms for VSLAM research with integrated stereo cameras, IMUs, and powerful onboard compute. Understanding how to deploy VSLAM safely on these platforms is essential for robotics researchers working on autonomous navigation in unstructured environments.
+
+**Real-World Applications**:
+- **Search and Rescue**: Autonomous exploration of disaster zones using visual SLAM
+- **Industrial Inspection**: Navigation in GPS-denied industrial facilities
+- **Healthcare Assistance**: Indoor navigation for elderly care and hospital delivery
+- **Space Exploration**: Autonomous navigation in extraterrestrial environments
+
+:::danger Hardware Safety
+Before deploying any motor control code to Unitree hardware:
+- Ensure emergency stop procedures are tested and accessible
+- Verify Dead Man Switch patterns with 100ms timeout are implemented
+- Test all safety limits in simulation before physical deployment
+- Have a human operator ready to take manual control if needed
+- Maintain safe operational boundaries and workspace constraints
+:::
+
+---
+
+## Unitree Platform Overview
+
+### Hardware Specifications
+
+The Unitree Go2 and G1 platforms offer different capabilities for VSLAM:
+
+<MermaidDiagram
+  id="unitree-platforms"
+  type="graph"
+  source={`graph LR
+    A[Unitree Platforms] --> B[Go2: Lightweight Humanoid]
+    A --> C[G1: Full-Size Humanoid]
+
+    B --> D[4 Legs, 12 DOF, 12kg]
+    B --> E[Stereo Camera: 1280x800@30fps]
+    B --> F[Onboard Compute: NVIDIA Xavier NX]
+    B --> G[Max Speed: 2.8 m/s]
+
+    C --> H[4 Legs, 23 DOF, 73kg]
+    C --> I[Stereo Camera: 1920x1080@30fps]
+    C --> J[Onboard Compute: NVIDIA Orin NX]
+    C --> K[Max Speed: 3.2 m/s]
+
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#f0ffe1
+    style H fill:#f0ffe1
+  `}
+  altText="Comparison of Unitree Go2 and G1 platforms: Go2 has 4 legs, 12 DOF, weighs 12kg, has stereo camera with 1280x800 resolution at 30fps, runs on NVIDIA Xavier NX, and has max speed of 2.8 m/s. G1 has 4 legs, 23 DOF, weighs 73kg, has higher resolution stereo camera, runs on NVIDIA Orin NX, and has max speed of 3.2 m/s."
+  caption="Unitree platform comparison showing different capabilities for VSLAM deployment."
+/>
+
+### VSLAM Requirements on Unitree
+
+Deploying VSLAM on Unitree platforms requires special consideration:
+
+- **Computational Constraints**: Limited power envelope (200-500W) vs. VSLAM computational demands
+- **Dynamic Motion**: Legged locomotion creates vibration and motion blur in camera feeds
+- **Real-Time Requirements**: Need to maintain balance while processing visual data
+- **Safety Critical**: Navigation errors can cause falls or collisions
+
+---
+
+## VSLAM Pipeline Configuration
+
+### Stereo Camera Setup
+
+Unitree robots come equipped with stereo cameras optimized for depth perception:
+
+```bash
+# Verify stereo camera connection
+ssh unitree@192.168.123.161  # Default Unitree IP
+dmesg | grep uvcvideo  # Check camera detection
+
+# Test camera streams
+ros2 run image_view image_view image:=/stereo_camera/left/image_rect_color
+ros2 run image_view image_view image:=/stereo_camera/right/image_rect_color
+```
+
+### ORB-SLAM3 Configuration for Unitree
+
+Create a configuration file optimized for Unitree's stereo camera:
+
+```yaml
+# config/orb_slam3_unitree.yaml
+%YAML:1.0
+
+# Camera Parameters
+Camera.fx: 320.0  # Focal length x (calibrated)
+Camera.fy: 320.0  # Focal length y (calibrated)
+Camera.cx: 320.0  # Principal point x
+Camera.cy: 240.0  # Principal point y
+Camera.k1: 0.0    # Distortion parameters (calibrated)
+Camera.k2: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
+Camera.k3: 0.0
+
+# Stereo Parameters
+Camera.bf: 64.0   # Baseline * focal length (calibrated)
+
+# ORB Extractor Parameters
+ORBextractor.nFeatures: 1200  # Reduced for real-time performance
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+# Viewer Parameters
+Viewer.KeyFrameSize: 0.05     # Smaller for humanoid scale
+Viewer.KeyFrameLineWidth: 1
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2
+Viewer.CameraSize: 0.08       # Appropriate for humanoid camera mount
+Viewer.CameraLineWidth: 3
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0
+```
+
+### RTAB-Map Integration
+
+For more robust mapping, configure RTAB-Map with Unitree-specific parameters:
+
+```bash
+# Launch RTAB-Map with Unitree stereo camera
+ros2 launch rtabmap_ros rtabmap.launch.py \
+  rgb_topic:=/stereo_camera/left/image_rect_color \
+  depth_topic:=/stereo_camera/depth_registered/image_raw \
+  camera_info_topic:=/stereo_camera/left/camera_info \
+  approx_sync:=true \
+  rtabmap_args:='--delete_db_on_start' \
+  depth_scale:=1.0 \
+  frame_id:=base_link \
+  visual_odometry:=false \
+  odom_topic:=/odometry/filtered \
+  publish_tf_map:=true
+```
+
+---
+
+## Safety-Focused Motor Control
+
+### Dead Man Switch Implementation
+
+The most critical aspect of physical robot deployment is implementing proper safety mechanisms. Here's a Dead Man Switch pattern for Unitree motor control:
+
+<CodeExample
+  language="python"
+  title="unitree_dead_man_switch.py"
+  tier="C"
+  description="Safety-focused motor control with 100ms Dead Man Switch for Unitree robots."
+>
+```python
+#!/usr/bin/env python3
+"""
+Unitree Dead Man Switch Safety Node
+
+Implements safety-focused motor control with 100ms timeout for Unitree robots.
+Stops all motor commands if safety conditions are violated or if heartbeat
+stops coming from higher-level controllers.
+"""
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import JointState, Imu
+from std_msgs.msg import Bool, Float32
+from unitree_msgs.msg import LowCmd, MotorCmd  # Unitree-specific
+import time
+import threading
+from collections import deque
+import numpy as np
+
+
+class UnitreeSafetyController(Node):
+    """Safety controller with Dead Man Switch for Unitree humanoid robots."""
+
+    def __init__(self):
+        super().__init__('unitree_safety_controller')
+
+        # Safety parameters
+        self.declare_parameter('deadman_timeout', 0.1)  # 100ms timeout
+        self.declare_parameter('max_linear_velocity', 0.5)  # 0.5 m/s max
+        self.declare_parameter('max_angular_velocity', 0.5)  # 0.5 rad/s max
+        self.declare_parameter('balance_threshold', 0.3)  # IMU angle threshold
+        self.declare_parameter('safety_enabled', True)
+
+        self.deadman_timeout = self.get_parameter('deadman_timeout').value
+        self.max_lin_vel = self.get_parameter('max_linear_velocity').value
+        self.max_ang_vel = self.get_parameter('max_angular_velocity').value
+        self.balance_threshold = self.get_parameter('balance_threshold').value
+        self.safety_enabled = self.get_parameter('safety_enabled').value
+
+        # Create QoS profile for safety-critical topics
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,  # Critical for safety
+        )
+
+        # Subscribers for safety monitoring
+        self.cmd_vel_sub = self.create_subscription(
+            Twist,
+            '/cmd_vel_safety_filtered',  # Filtered commands from higher level
+            self.cmd_vel_callback,
+            qos_profile
+        )
+
+        self.joint_state_sub = self.create_subscription(
+            JointState,
+            '/joint_states',
+            self.joint_state_callback,
+            qos_profile
+        )
+
+        self.imu_sub = self.create_subscription(
+            Imu,
+            '/imu/data',
+            self.imu_callback,
+            qos_profile
+        )
+
+        # Publishers for safe motor commands
+        self.motor_cmd_pub = self.create_publisher(LowCmd, '/lowcmd', qos_profile)
+        self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', qos_profile)
+        self.safety_status_pub = self.create_publisher(Bool, '/safety_ok', qos_profile)
+
+        # Safety state
+        self.last_cmd_time = self.get_clock().now()
+        self.last_cmd_vel = Twist()
+        self.current_joint_states = JointState()
+        self.current_imu = Imu()
+        self.balance_ok = True
+        self.velocity_safe = True
+        self.emergency_stop_active = False
+
+        # Thread-safe access
+        self.safety_lock = threading.Lock()
+
+        # Safety monitoring timer (runs at 100Hz for quick response)
+        self.safety_timer = self.create_timer(0.01, self.safety_check)  # 100Hz
+
+        self.get_logger().info('Unitree Safety Controller started with Dead Man Switch')
+
+    def cmd_vel_callback(self, msg):
+        """Handle incoming velocity commands with safety filtering."""
+        with self.safety_lock:
+            # Check velocity limits
+            if abs(msg.linear.x) > self.max_lin_vel:
+                self.get_logger().warn(f'Linear velocity limit exceeded: {msg.linear.x}')
+                msg.linear.x = max(min(msg.linear.x, self.max_lin_vel), -self.max_lin_vel)
+
+            if abs(msg.angular.z) > self.max_ang_vel:
+                self.get_logger().warn(f'Angular velocity limit exceeded: {msg.angular.z}')
+                msg.angular.z = max(min(msg.angular.z, self.max_ang_vel), -self.max_ang_vel)
+
+            self.last_cmd_vel = msg
+            self.last_cmd_time = self.get_clock().now()
+
+    def joint_state_callback(self, msg):
+        """Monitor joint states for safety."""
+        with self.safety_lock:
+            self.current_joint_states = msg
+
+    def imu_callback(self, msg):
+        """Monitor IMU data for balance safety."""
+        with self.safety_lock:
+            self.current_imu = msg
+
+            # Convert quaternion to Euler angles (simplified)
+            # In practice, use tf2 for proper quaternion conversion
+            w, x, y, z = msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z
+            pitch = np.arcsin(2 * (w * y - z * x))  # Simplified pitch calculation
+
+            # Check if robot is tilting too much
+            self.balance_ok = abs(pitch) < self.balance_threshold
+
+    def safety_check(self):
+        """Perform safety checks at high frequency (100Hz)."""
+        current_time = self.get_clock().now()
+
+        with self.safety_lock:
+            # Check Dead Man Switch timeout
+            time_since_last_cmd = (current_time - self.last_cmd_time).nanoseconds / 1e9
+
+            # Determine if command should be passed through
+            should_stop = (
+                time_since_last_cmd > self.deadman_timeout or
+                not self.balance_ok or
+                not self.safety_enabled or
+                not self.velocity_safe
+            )
+
+            if should_stop:
+                # Send emergency stop command
+                self.emergency_stop_active = True
+
+                # Publish emergency stop signal
+                emergency_msg = Bool()
+                emergency_msg.data = True
+                self.emergency_stop_pub.publish(emergency_msg)
+
+                # Publish stop command to motors
+                stop_cmd = self.create_stop_command()
+                self.motor_cmd_pub.publish(stop_cmd)
+
+                # Log reason for stop
+                if time_since_last_cmd > self.deadman_timeout:
+                    self.get_logger().error('DEAD MAN SWITCH TIMEOUT - STOPPING ROBOT')
+                elif not self.balance_ok:
+                    self.get_logger().error('BALANCE THRESHOLD EXCEEDED - STOPPING FOR SAFETY')
+
+                # Publish safety status
+                status_msg = Bool()
+                status_msg.data = False
+                self.safety_status_pub.publish(status_msg)
+            else:
+                # Process and forward the command safely
+                safe_cmd = self.process_safe_command(self.last_cmd_vel)
+                self.motor_cmd_pub.publish(safe_cmd)
+
+                # Publish safety status
+                status_msg = Bool()
+                status_msg.data = True
+                self.safety_status_pub.publish(status_msg)
+
+    def process_safe_command(self, twist_cmd):
+        """Process twist command into safe motor commands."""
+        # Convert Twist to Unitree LowCmd (simplified)
+        low_cmd = LowCmd()
+
+        # In practice, this would convert Twist to appropriate motor commands
+        # based on the specific gait and locomotion pattern
+
+        # Add safety checks and limits
+        # This is a simplified example - real implementation would be more complex
+        # based on Unitree's SDK and control requirements
+
+        return low_cmd
+
+    def create_stop_command(self):
+        """Create emergency stop command."""
+        stop_cmd = LowCmd()
+
+        # Set all motor torques to zero for safe stop
+        # This would involve setting appropriate values for Unitree's motor commands
+        # based on the specific model (Go2, G1, etc.)
+
+        return stop_cmd
+
+    def destroy_node(self):
+        """Ensure robot stops when node is destroyed."""
+        stop_cmd = self.create_stop_command()
+        self.motor_cmd_pub.publish(stop_cmd)
+
+        emergency_msg = Bool()
+        emergency_msg.data = True
+        self.emergency_stop_pub.publish(emergency_msg)
+
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = UnitreeSafetyController()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down safety controller')
+    finally:
+        # Ensure robot stops
+        stop_cmd = node.create_stop_command()
+        node.motor_cmd_pub.publish(stop_cmd)
+
+        emergency_msg = Bool()
+        emergency_msg.data = True
+        node.emergency_stop_pub.publish(emergency_msg)
+
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+### VSLAM Integration with Safety
+
+When integrating VSLAM with motor control, ensure proper safety coordination:
+
+<CodeExample
+  language="python"
+  title="vslam_safety_integrator.py"
+  tier="C"
+  description="Integration node that coordinates VSLAM navigation with safety controller."
+>
+```python
+#!/usr/bin/env python3
+"""
+VSLAM Safety Integrator
+
+Coordinates VSLAM-based navigation with safety controller, ensuring
+safe path execution on Unitree humanoid robots.
+"""
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist, PoseStamped
+from nav_msgs.msg import Path, Odometry
+from sensor_msgs.msg import Image
+from std_msgs.msg import Bool
+from unitree_msgs.msg import LowCmd
+import numpy as np
+import threading
+from typing import Tuple
+
+
+class VSLAMSafetyIntegrator(Node):
+    """Integrates VSLAM navigation with safety-focused motor control."""
+
+    def __init__(self):
+        super().__init__('vslam_safety_integrator')
+
+        # Declare parameters
+        self.declare_parameter('min_distance_to_obstacle', 0.5)  # meters
+        self.declare_parameter('max_navigation_speed', 0.3)     # m/s
+        self.declare_parameter('safety_margin', 0.2)           # meters
+
+        self.min_distance = self.get_parameter('min_distance_to_obstacle').value
+        self.max_speed = self.get_parameter('max_navigation_speed').value
+        self.safety_margin = self.get_parameter('safety_margin').value
+
+        # Create QoS profiles
+        qos_sensor = rclpy.qos.QoSProfile(
+            history=rclpy.qos.QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=rclpy.qos.QoSReliabilityPolicy.BEST_EFFORT,
+        )
+
+        qos_control = rclpy.qos.QoSProfile(
+            history=rclpy.qos.QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=rclpy.qos.QoSReliabilityPolicy.RELIABLE,
+        )
+
+        # Subscribers
+        self.vslam_pose_sub = self.create_subscription(
+            PoseStamped,
+            '/orb_slam3/camera_pose',
+            self.vslam_pose_callback,
+            qos_control
+        )
+
+        self.depth_image_sub = self.create_subscription(
+            Image,
+            '/stereo_camera/depth_registered/image_raw',
+            self.depth_callback,
+            qos_sensor
+        )
+
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            '/odometry/filtered',
+            self.odom_callback,
+            qos_control
+        )
+
+        self.safety_status_sub = self.create_subscription(
+            Bool,
+            '/safety_ok',
+            self.safety_status_callback,
+            qos_control
+        )
+
+        # Publishers
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_safety_filtered', qos_control)
+        self.safe_path_pub = self.create_publisher(Path, '/safe_path', qos_control)
+
+        # Internal state
+        self.current_pose = None
+        self.current_odom = None
+        self.depth_image = None
+        self.safety_ok = True
+        self.safety_lock = threading.Lock()
+
+        # Navigation timer
+        self.nav_timer = self.create_timer(0.1, self.navigate_safely)  # 10Hz
+
+        self.get_logger().info('VSLAM Safety Integrator initialized')
+
+    def vslam_pose_callback(self, msg):
+        """Receive pose from VSLAM system."""
+        with self.safety_lock:
+            self.current_pose = msg.pose
+
+    def depth_callback(self, msg):
+        """Receive depth image for obstacle detection."""
+        with self.safety_lock:
+            self.depth_image = msg
+
+    def odom_callback(self, msg):
+        """Receive odometry for navigation."""
+        with self.safety_lock:
+            self.current_odom = msg
+
+    def safety_status_callback(self, msg):
+        """Receive safety status from safety controller."""
+        with self.safety_lock:
+            self.safety_ok = msg.data
+
+    def navigate_safely(self):
+        """Navigate while ensuring safety constraints."""
+        with self.safety_lock:
+            if not self.safety_ok:
+                self.get_logger().warn('Safety system reports unsafe - stopping navigation')
+                self.stop_robot()
+                return
+
+            if self.current_pose is None or self.depth_image is None:
+                self.get_logger().debug('Waiting for VSLAM pose and depth data')
+                return
+
+            # Check for obstacles in depth data
+            min_distance = self.get_min_obstacle_distance()
+
+            if min_distance < self.min_distance:
+                self.get_logger().warn(f'Obstacle detected at {min_distance:.2f}m - slowing down')
+                self.adjust_speed_for_obstacles(min_distance)
+            else:
+                self.execute_navigation_plan()
+
+    def get_min_obstacle_distance(self) -> float:
+        """Calculate minimum distance to obstacles from depth image."""
+        if self.depth_image is None:
+            return float('inf')
+
+        # Convert depth image to numpy array (simplified)
+        # In practice, use OpenCV or similar for efficient processing
+        # This is a placeholder for actual depth processing
+        # which would involve converting sensor_msgs/Image to numpy array
+        # and finding minimum non-zero values in relevant regions
+
+        # Placeholder: return a reasonable default
+        # Actual implementation would process the depth image
+        return 1.0  # Placeholder value
+
+    def adjust_speed_for_obstacles(self, min_distance: float):
+        """Adjust navigation speed based on obstacle proximity."""
+        # Calculate safe speed based on distance to obstacle
+        safe_speed_ratio = min_distance / self.min_distance
+        adjusted_speed = min(self.max_speed * safe_speed_ratio, self.max_speed * 0.5)
+
+        cmd_vel = Twist()
+        cmd_vel.linear.x = adjusted_speed
+        cmd_vel.angular.z = 0.0  # Simplified - in practice, adjust based on path
+
+        self.cmd_vel_pub.publish(cmd_vel)
+
+    def execute_navigation_plan(self):
+        """Execute planned navigation with safety monitoring."""
+        # In practice, this would:
+        # 1. Get next waypoint from global path
+        # 2. Calculate local trajectory considering obstacles
+        # 3. Generate safe velocity commands
+        # 4. Publish to safety-filtered topic
+
+        cmd_vel = Twist()
+        cmd_vel.linear.x = min(self.max_speed, 0.3)  # Conservative speed
+        cmd_vel.angular.z = 0.0
+
+        self.cmd_vel_pub.publish(cmd_vel)
+
+    def stop_robot(self):
+        """Immediate stop for safety."""
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.0
+        self.cmd_vel_pub.publish(cmd_vel)
+
+    def destroy_node(self):
+        """Ensure robot stops when node is destroyed."""
+        self.stop_robot()
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = VSLAMSafetyIntegrator()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down VSLAM safety integrator')
+    finally:
+        node.stop_robot()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+</CodeExample>
+
+---
+
+## Physical Deployment Procedures
+
+### Pre-Deployment Safety Checklist
+
+Before deploying VSLAM to physical hardware, complete this checklist:
+
+1. **Software Safety Systems**:
+   - [ ] Dead Man Switch timeout implemented (100ms)
+   - [ ] Velocity limits enforced
+   - [ ] Balance monitoring active
+   - [ ] Emergency stop procedures tested
+
+2. **Hardware Safety Systems**:
+   - [ ] Physical emergency stop button accessible
+   - [ ] Safe operational boundaries established
+   - [ ] Fall protection measures in place
+   - [ ] Collision avoidance sensors functional
+
+3. **Simulation Validation**:
+   - [ ] VSLAM pipeline tested in Gazebo simulation
+   - [ ] Navigation algorithms validated in Isaac Sim
+   - [ ] Safety controller behavior verified in simulation
+
+### Deployment Process
+
+1. **Initial Setup**:
+```bash
+# SSH to Unitree robot
+ssh unitree@192.168.123.161
+
+# Source ROS 2 environment
+source /opt/ros/humble/setup.bash
+source ~/unitree_ws/install/setup.bash
+
+# Launch safety controller first
+ros2 launch unitree_ros unitree_safety.launch.py
+```
+
+2. **VSLAM Pipeline Launch**:
+```bash
+# Launch VSLAM with safety integrator
+ros2 launch orb_slam3_ros unitree_stereo.launch.py \
+  config_path:=~/config/orb_slam3_unitree.yaml \
+  vocabulary_path:=~/ORBvoc.txt
+
+# Launch safety integrator
+ros2 run unitree_vslam vslam_safety_integrator
+```
+
+3. **Monitoring During Operation**:
+```bash
+# Monitor safety status
+ros2 topic echo /safety_ok
+
+# Monitor navigation commands
+ros2 topic echo /cmd_vel_safety_filtered
+
+# Monitor robot state
+ros2 run rqt_plot rqt_plot \
+  --topics /odometry/filtered/pose/pose/position/x \
+  /odometry/filtered/pose/pose/position/y
+```
+
+---
+
+## Hands-On Exercise: VSLAM Deployment
+
+### Objective
+
+Deploy a complete VSLAM system on your Unitree robot with proper safety mechanisms and validate the sim-to-real transfer.
+
+### Requirements
+
+1. **Hardware Setup**: Unitree Go2/G1 with stereo camera and ROS 2 Humble
+2. **VSLAM Pipeline**: ORB-SLAM3 or RTAB-Map configured for Unitree
+3. **Safety System**: Dead Man Switch with 100ms timeout implemented
+4. **Validation**: Demonstrate safe navigation in known environment
+
+### Implementation Steps
+
+<Exercise
+  id="ex-vslam-deployment"
+  title="Physical VSLAM Deployment on Unitree"
+  difficulty="advanced"
+  variants={[
+    {
+      tier: "C",
+      description: "Deploy complete VSLAM system with safety mechanisms on Unitree robot",
+      setup: "Ensure Unitree robot is powered on, stereo camera functional, and ROS 2 Humble installed",
+      code: `#!/usr/bin/env python3
+# unitree_vslam_demo.py - Complete VSLAM demo with safety
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Image
+from std_msgs.msg import Bool
+import time
+
+class UnitreeVSLAMDemo(Node):
+    def __init__(self):
+        super().__init__('unitree_vslam_demo')
+
+        # Publishers and subscribers
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_safety_filtered', 1)
+
+        # Timer for safety-aware navigation
+        self.nav_timer = self.create_timer(0.5, self.navigate_with_safety)
+
+        self.get_logger().info('Unitree VSLAM Demo started')
+
+    def navigate_with_safety(self):
+        """Navigate while respecting safety constraints."""
+        # In a real implementation, this would:
+        # 1. Get current pose from VSLAM
+        # 2. Check depth data for obstacles
+        # 3. Generate safe velocity commands
+        # 4. Respect Dead Man Switch timeout
+
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.2  # Conservative speed
+        cmd_vel.angular.z = 0.0
+
+        # Always ensure safety systems are active
+        self.cmd_vel_pub.publish(cmd_vel)
+
+def main():
+    rclpy.init()
+    node = UnitreeVSLAMDemo()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down')
+    node.destroy_node()
+    rclpy.shutdown()
+      `,
+      acceptanceCriteria: [
+        "VSLAM pipeline successfully runs on Unitree hardware",
+        "Dead Man Switch pattern with 100ms timeout implemented and tested",
+        "Robot navigates safely without collisions or falls",
+        "Emergency stop procedures are functional and tested",
+        "System operates within computational constraints of Unitree platform"
+      ],
+      solution: "Validate with: ros2 topic echo /safety_ok and monitor robot behavior in controlled environment"
+    }
+  ]}
+/>
+
+---
+
+## Performance Optimization for Unitree
+
+### Computational Constraints
+
+Unitree platforms have specific computational limitations that require optimization:
+
+```bash
+# Monitor computational usage
+ssh unitree@192.168.123.161
+htop                    # CPU usage
+nvidia-smi             # GPU usage (if available)
+free -h                # Memory usage
+
+# Optimize VSLAM for constrained platform
+export OMP_NUM_THREADS=4    # Limit OpenMP threads
+export MKL_NUM_THREADS=4    # Limit Intel MKL threads
+```
+
+### Memory Management
+
+```python
+def optimize_vslam_memory():
+    """Memory optimization for VSLAM on constrained platform."""
+    # Use smaller keyframe databases
+    max_keyframes = 200  # Reduced from default 1000+
+
+    # Limit feature tracking
+    max_features_per_frame = 800  # Reduced for real-time
+
+    # Use efficient data structures
+    # Implement sliding window optimization
+    pass
+```
+
+---
+
+## Troubleshooting Common Issues
+
+### VSLAM Tracking Loss
+
+**Problem**: VSLAM loses tracking during dynamic motion
+**Solutions**:
+- Reduce robot speed during challenging terrain
+- Increase feature extraction parameters
+- Use IMU data to improve tracking during motion
+- Implement loop closure detection for relocalization
+
+### Safety System False Positives
+
+**Problem**: Safety system stops robot unnecessarily
+**Solutions**:
+- Fine-tune balance thresholds for specific terrain
+- Adjust Dead Man Switch timeout for communication delays
+- Verify IMU calibration
+- Test with different locomotion gaits
+
+### Computational Overload
+
+**Problem**: VSLAM causes computational overload on robot
+**Solutions**:
+- Reduce image resolution or frame rate
+- Use faster feature descriptors
+- Implement multi-threading for heavy computations
+- Offload to external compute if possible
+
+---
+
+## Summary
+
+**Key Takeaways for VSLAM on Unitree**:
+
+- **Safety First**: Always implement Dead Man Switch with 100ms timeout for physical robot deployment
+- **Computational Constraints**: Optimize VSLAM for Unitree's power and compute limitations
+- **Dynamic Motion**: Account for legged locomotion effects on stereo vision
+- **Validation**: Test extensively in simulation before physical deployment
+- **Emergency Procedures**: Maintain accessible emergency stop mechanisms
+
+**Next Steps**:
+After mastering VSLAM deployment on Unitree robots, you'll be ready for the full capstone project in Module 4. The safety patterns learned here will be essential for all physical robot deployments.
+
+---
+
+## Quiz
+
+<Quiz
+  questions={[
+    {
+      id: 'q1',
+      question: 'What is the required Dead Man Switch timeout for Unitree robot safety?',
+      options: [
+        '1000ms (1 second)',
+        '500ms (0.5 seconds)',
+        '100ms (0.1 seconds)',
+        '10ms (0.01 seconds)'
+      ],
+      correctAnswer: 2,
+      explanation: 'A 100ms (0.1 seconds) timeout is required for Dead Man Switch patterns in physical robot deployment, providing quick response to command failures while allowing for normal communication delays.',
+      hint: 'Look for safety implementation requirements in the safety section.'
+    },
+    {
+      id: 'q2',
+      question: 'Why is VSLAM particularly challenging on legged robots like Unitree?',
+      options: [
+        'Legged robots have no cameras',
+        'Dynamic motion creates vibration and motion blur in camera feeds',
+        'Legged robots are too slow for VSLAM',
+        'Legged robots use different ROS distributions'
+      ],
+      correctAnswer: 1,
+      explanation: 'Legged locomotion creates vibration and motion blur in camera feeds, making visual feature tracking more difficult compared to wheeled robots with smoother motion.',
+      hint: 'Consider the challenges of stereo vision on dynamically moving platforms.'
+    },
+    {
+      id: 'q3',
+      question: 'What should you do before deploying VSLAM to physical Unitree hardware?',
+      options: [
+        'Skip simulation testing to save time',
+        'Test only the motor control without VSLAM',
+        'Validate the entire pipeline in simulation first',
+        'Deploy directly without testing'
+      ],
+      correctAnswer: 2,
+      explanation: 'Always validate the entire pipeline in simulation first before physical deployment. This includes VSLAM, navigation, and safety systems working together.',
+      hint: 'Review the pre-deployment checklist.'
+    },
+    {
+      id: 'q4',
+      question: 'What is the maximum recommended linear velocity for safe VSLAM navigation on Unitree robots?',
+      options: [
+        '1.0 m/s',
+        '0.5 m/s',
+        '2.0 m/s',
+        '0.1 m/s'
+      ],
+      correctAnswer: 1,
+      explanation: 'Conservative speeds like 0.3-0.5 m/s are recommended for safe VSLAM navigation, allowing time for obstacle detection and reaction.',
+      hint: 'Look at the safety-focused motor control implementation.'
+    },
+    {
+      id: 'q5',
+      question: 'What is the primary safety concern when VSLAM loses tracking on a physical robot?',
+      options: [
+        'The robot moves faster',
+        'The robot may collide with obstacles or fall',
+        'The robot saves more memory',
+        'The robot uses less power'
+      ],
+      correctAnswer: 1,
+      explanation: 'When VSLAM loses tracking, the robot may navigate based on outdated information, leading to collisions or falls. Safety systems must detect and respond to tracking failures.',
+      hint: 'Consider what happens when the robot loses awareness of its environment.'
+    }
+  ]}
+/>
+
+---
+
+## What's Next?
+
+In **Module 4, Week 13**, you'll work on the complete capstone project that integrates all the concepts learned. The VSLAM and safety skills you've developed will be essential for creating a complete voice-controlled navigation system on physical hardware.
+
+:::tip Preparation for Next Steps
+Practice the complete deployment workflow from simulation to physical robot, ensuring all safety mechanisms are properly implemented and tested.
+:::
+
+---

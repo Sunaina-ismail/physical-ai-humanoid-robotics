@@ -1,0 +1,1158 @@
+---
+sidebar_position: 19
+title: "Chapter 19: GMapping & Cartographer"
+description: "Explore two leading SLAM implementations: GMapping for laser-based mapping and Google Cartographer for advanced multi-sensor SLAM with 2D and 3D capabilities."
+tags: [gmapping, cartographer, slam, laser-mapping, multi-sensor, robotics, lidar]
+tier: A
+prerequisites: ["Module 1: ROS 2 Fundamentals", "Module 1: TF2 Transforms", "Module 3: SLAM Fundamentals"]
+learning_outcomes: ["Configure and tune GMapping for 2D laser SLAM", "Implement Cartographer for multi-sensor SLAM", "Compare different SLAM approaches and their trade-offs", "Deploy SLAM systems on real robot platforms"]
+---
+
+# Chapter 19: GMapping & Cartographer
+
+## Introduction
+
+GMapping and Cartographer represent two of the most widely used SLAM implementations in robotics. GMapping, based on Rao-Blackwellized particle filters, provides robust 2D laser-based mapping for ground vehicles. Cartographer, developed by Google, offers advanced multi-sensor SLAM capabilities with support for both 2D and 3D mapping. This chapter explores both systems, their configuration, tuning, and practical deployment considerations.
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+- Configure and tune GMapping for optimal 2D laser SLAM performance
+- Implement Cartographer for multi-sensor SLAM applications
+- Compare different SLAM approaches and select appropriate systems for applications
+- Deploy SLAM systems on real robot platforms with proper sensor integration
+
+## Prerequisites
+
+Before starting this chapter, ensure you have:
+- Completed Module 1 (ROS 2 fundamentals, TF2)
+- Module 3 Chapter 18 (SLAM fundamentals)
+- Experience with ROS 2 parameter configuration
+- Understanding of sensor data types (LIDAR, IMU, odometry)
+
+## Real-World Analogy: Different Mapping Tools for Different Jobs
+
+Think of GMapping and Cartographer like different tools in a surveyor's kit. GMapping is like a reliable total station - excellent for precise 2D measurements and mapping in structured environments where you have good odometry and consistent laser returns. Cartographer is like a modern LiDAR scanner with IMU integration - capable of creating detailed 3D maps even when moving quickly or in challenging environments where traditional odometry fails. Each tool has its strengths and is appropriate for different scenarios.
+
+## Core Concepts
+
+### 1. GMapping: Particle Filter SLAM
+
+GMapping implements Rao-Blackwellized particle filter SLAM specifically designed for 2D laser range finders:
+
+- **Particle Filter**: Handles uncertainty in robot pose estimation
+- **Grid Mapping**: Creates occupancy grid maps from laser data
+- **Scan Matching**: Aligns laser scans to improve pose estimates
+- **Loop Closure**: Detects revisited locations to correct drift
+
+### 2. Cartographer: Advanced Multi-Sensor SLAM
+
+Cartographer provides sophisticated multi-sensor SLAM with:
+
+- **Real-time SLAM**: Optimized for online operation
+- **Multi-sensor Fusion**: Integrates LIDAR, IMU, odometry, and other sensors
+- **2D and 3D Support**: Flexible configuration for different mapping needs
+- **Submap-based Optimization**: Efficient global optimization using submaps
+
+### 3. Performance Considerations
+
+- **Computational Requirements**: GMapping is lighter, Cartographer more demanding
+- **Sensor Requirements**: GMapping needs good odometry, Cartographer can work with fewer sensors
+- **Mapping Quality**: Cartographer typically produces higher quality maps
+- **Tuning Complexity**: GMapping is simpler to tune, Cartographer more complex
+
+## GMapping Implementation and Configuration
+
+### GMapping Node Implementation
+
+```python
+#!/usr/bin/env python3
+
+"""
+GMapping Wrapper Node
+Demonstrates integration with ROS 2 navigation stack
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry, OccupancyGrid
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from tf2_ros import TransformBroadcaster, TransformStamped
+from std_msgs.msg import Header
+import numpy as np
+import math
+from typing import Optional
+
+
+class GMappingNode(Node):
+    def __init__(self):
+        super().__init__('gmapping_node')
+
+        # Create transform broadcaster for map->odom
+        self.tf_broadcaster = TransformBroadcaster(self)
+
+        # Subscribers
+        self.scan_sub = self.create_subscription(
+            LaserScan, 'scan', self.scan_callback, 10
+        )
+        self.odom_sub = self.create_subscription(
+            Odometry, 'odom', self.odom_callback, 10
+        )
+
+        # Publishers
+        self.map_pub = self.create_publisher(OccupancyGrid, 'map', 10)
+        self.pose_pub = self.create_publisher(PoseWithCovarianceStamped, 'pose', 10)
+
+        # SLAM state
+        self.map_resolution = 0.05  # meters per cell
+        self.map_width = 400        # cells
+        self.map_height = 400       # cells
+        self.map_origin_x = -10.0   # meters
+        self.map_origin_y = -10.0   # meters
+
+        # Initialize occupancy grid
+        self.grid = np.zeros((self.map_height, self.map_width), dtype=np.int8)
+        self.grid.fill(-1)  # Unknown
+
+        # Robot state
+        self.robot_x = 0.0
+        self.robot_y = 0.0
+        self.robot_theta = 0.0
+        self.odom_x = 0.0
+        self.odom_y = 0.0
+        self.odom_theta = 0.0
+
+        # GMapping parameters (simplified simulation)
+        self.max_range = 10.0
+        self.min_particles = 100
+        self.max_particles = 500
+        self.linear_update = 0.5
+        self.angular_update = 0.5
+        self.resample_threshold = 0.5
+
+        # Motion tracking
+        self.last_odom = None
+        self.distance_traveled = 0.0
+        self.angle_turned = 0.0
+
+        self.get_logger().info('GMapping Node initialized')
+
+    def odom_callback(self, msg):
+        """Handle odometry updates"""
+        new_x = msg.pose.pose.position.x
+        new_y = msg.pose.pose.position.y
+        new_theta = self.quaternion_to_yaw(msg.pose.pose.orientation)
+
+        if self.last_odom is not None:
+            # Calculate motion since last update
+            dx = new_x - self.odom_x
+            dy = new_y - self.odom_y
+            dtheta = new_theta - self.odom_theta
+
+            # Normalize angle
+            dtheta = math.atan2(math.sin(dtheta), math.cos(dtheta))
+
+            # Update motion tracking
+            self.distance_traveled += math.sqrt(dx*dx + dy*dy)
+            self.angle_turned += abs(dtheta)
+
+        self.odom_x = new_x
+        self.odom_y = new_y
+        self.odom_theta = new_theta
+        self.last_odom = msg
+
+    def scan_callback(self, msg):
+        """Process laser scan for mapping"""
+        # Check if we need to update the map (based on motion thresholds)
+        if (self.distance_traveled > self.linear_update or
+            self.angle_turned > self.angular_update):
+
+            # Update robot pose estimate (simplified - in real GMapping this uses particles)
+            self.robot_x = self.odom_x
+            self.robot_y = self.odom_y
+            self.robot_theta = self.odom_theta
+
+            # Process scan and update map
+            self.update_map_from_scan(msg)
+
+            # Reset motion counters
+            self.distance_traveled = 0.0
+            self.angle_turned = 0.0
+
+            # Publish updated map and pose
+            self.publish_map()
+            self.publish_pose()
+            self.broadcast_transform()
+
+    def update_map_from_scan(self, scan_msg):
+        """Update occupancy grid based on laser scan"""
+        # Convert robot pose to grid coordinates
+        robot_grid_x = int((self.robot_x - self.map_origin_x) / self.map_resolution)
+        robot_grid_y = int((self.robot_y - self.map_origin_y) / self.map_resolution)
+
+        # Process each laser beam using ray tracing
+        angle = scan_msg.angle_min
+        for i, range_val in enumerate(scan_msg.ranges):
+            if not (math.isinf(range_val) or math.isnan(range_val)) and range_val < self.max_range:
+                # Calculate endpoint of laser beam in world coordinates
+                beam_x = self.robot_x + range_val * math.cos(self.robot_theta + angle)
+                beam_y = self.robot_y + range_val * math.sin(self.robot_theta + angle)
+
+                # Convert to grid coordinates
+                beam_grid_x = int((beam_x - self.map_origin_x) / self.map_resolution)
+                beam_grid_y = int((beam_y - self.map_origin_y) / self.map_resolution)
+
+                # Perform ray tracing
+                self.ray_trace_update(robot_grid_x, robot_grid_y, beam_grid_x, beam_grid_y, occupied=True)
+
+                # Mark endpoint as occupied
+                if 0 <= beam_grid_x < self.map_width and 0 <= beam_grid_y < self.map_height:
+                    # Update with probabilistic occupancy
+                    current_val = self.grid[beam_grid_y, beam_grid_x]
+                    if current_val == -1:  # Unknown
+                        self.grid[beam_grid_y, beam_grid_x] = 100  # Occupied
+                    else:
+                        # Update probability (simplified)
+                        self.grid[beam_grid_y, beam_grid_x] = min(100, current_val + 25)
+
+            elif math.isinf(range_val):
+                # Free space up to max range
+                free_x = self.robot_x + self.max_range * math.cos(self.robot_theta + angle)
+                free_y = self.robot_y + self.max_range * math.sin(self.robot_theta + angle)
+
+                free_grid_x = int((free_x - self.map_origin_x) / self.map_resolution)
+                free_grid_y = int((free_y - self.map_origin_y) / self.map_resolution)
+
+                self.ray_trace_update(robot_grid_x, robot_grid_y, free_grid_x, free_grid_y, occupied=False)
+
+            angle += scan_msg.angle_increment
+
+    def ray_trace_update(self, start_x, start_y, end_x, end_y, occupied):
+        """Ray trace to update grid occupancy"""
+        # Bresenham's algorithm with occupancy updates
+        dx = abs(end_x - start_x)
+        dy = abs(end_y - start_y)
+        x_step = 1 if end_x > start_x else -1
+        y_step = 1 if end_y > start_y else -1
+
+        error = dx - dy
+        x, y = start_x, start_y
+
+        while x != end_x or y != end_y:
+            # Check bounds
+            if 0 <= x < self.map_width and 0 <= y < self.map_height:
+                if occupied and math.sqrt((x-start_x)**2 + (y-start_y)**2) > 0.5/self.map_resolution:
+                    # Mark as occupied (endpoint)
+                    self.grid[y, x] = min(100, self.grid[y, x] + 10 if self.grid[y, x] != -1 else 50)
+                elif not occupied:
+                    # Mark as free
+                    self.grid[y, x] = max(0, self.grid[y, x] - 5 if self.grid[y, x] != -1 else 25)
+
+            # Move to next cell
+            error2 = 2 * error
+            if error2 > -dy:
+                error -= dy
+                x += x_step
+            if error2 < dx:
+                error += dx
+                y += y_step
+
+    def quaternion_to_yaw(self, quat):
+        """Convert quaternion to yaw angle"""
+        siny_cosp = 2 * (quat.w * quat.z + quat.x * quat.y)
+        cosy_cosp = 1 - 2 * (quat.y * quat.y + quat.z * quat.z)
+        return math.atan2(siny_cosp, cosy_cosp)
+
+    def publish_map(self):
+        """Publish occupancy grid map"""
+        map_msg = OccupancyGrid()
+        map_msg.header = Header()
+        map_msg.header.stamp = self.get_clock().now().to_msg()
+        map_msg.header.frame_id = 'map'
+
+        # Set map metadata
+        map_msg.info.resolution = self.map_resolution
+        map_msg.info.width = self.map_width
+        map_msg.info.height = self.map_height
+        map_msg.info.origin.position.x = self.map_origin_x
+        map_msg.info.origin.position.y = self.map_origin_y
+        map_msg.info.origin.position.z = 0.0
+        map_msg.info.origin.orientation.w = 1.0
+
+        # Flatten grid and convert to list
+        map_msg.data = [int(val) for val in self.grid.flatten()]
+
+        self.map_pub.publish(map_msg)
+
+    def publish_pose(self):
+        """Publish current robot pose"""
+        pose_msg = PoseWithCovarianceStamped()
+        pose_msg.header = Header()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.frame_id = 'map'
+        pose_msg.pose.pose.position.x = self.robot_x
+        pose_msg.pose.pose.position.y = self.robot_y
+        pose_msg.pose.pose.position.z = 0.0
+
+        # Convert angle to quaternion
+        yaw = self.robot_theta
+        pose_msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        pose_msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+
+        # Set covariance (simplified)
+        pose_msg.pose.covariance[0] = 0.1   # x
+        pose_msg.pose.covariance[7] = 0.1   # y
+        pose_msg.pose.covariance[35] = 0.1  # yaw
+
+        self.pose_pub.publish(pose_msg)
+
+    def broadcast_transform(self):
+        """Broadcast map->odom transform"""
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'map'
+        t.child_frame_id = 'odom'
+
+        # For this simplified example, we'll use the robot's current pose
+        # In real GMapping, this would be the difference between map and odom frames
+        t.transform.translation.x = self.robot_x
+        t.transform.translation.y = self.robot_y
+        t.transform.translation.z = 0.0
+
+        yaw = self.robot_theta
+        t.transform.rotation.z = math.sin(yaw / 2.0)
+        t.transform.rotation.w = math.cos(yaw / 2.0)
+
+        self.tf_broadcaster.sendTransform(t)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    gmapping_node = GMappingNode()
+
+    try:
+        rclpy.spin(gmapping_node)
+    except KeyboardInterrupt:
+        gmapping_node.get_logger().info('Shutting down GMapping node')
+    finally:
+        gmapping_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## GMapping Configuration Parameters
+
+### GMapping Launch File
+
+```xml
+<launch>
+  <!-- GMapping SLAM Launch File -->
+
+  <!-- GMapping node -->
+  <node pkg="slam_gmapping"
+        exec="slam_gmapping"
+        name="slam_gmapping"
+        output="screen">
+
+    <!-- GMapping Parameters -->
+    <param name="use_sim_time" value="True"/>
+
+    <!-- Scan parameters -->
+    <param name="base_frame" value="base_link"/>
+    <param name="odom_frame" value="odom"/>
+    <param name="map_frame" value="map"/>
+    <param name="scan_topic" value="scan"/>
+
+    <!-- GMapping-specific parameters -->
+    <param name="map_update_interval" value="2.0"/>
+    <param name="maxUrange" value="12.0"/>
+    <param name="sigma" value="0.05"/>
+    <param name="kernelSize" value="1"/>
+    <param name="lstep" value="0.05"/>
+    <param name="astep" value="0.05"/>
+    <param name="iterations" value="5"/>
+    <param name="lsigma" value="0.075"/>
+    <param name="ogain" value="3.0"/>
+    <param name="lskip" value="0"/>
+    <param name="minimumScore" value="50.0"/>
+
+    <!-- Particle filter parameters -->
+    <param name="srr" value="0.01"/>
+    <param name="srt" value="0.02"/>
+    <param name="str" value="0.01"/>
+    <param name="stt" value="0.02"/>
+
+    <!-- Resolution and map size -->
+    <param name="linearUpdate" value="0.5"/>
+    <param name="angularUpdate" value="0.5"/>
+    <param name="temporalUpdate" value="3.0"/>
+    <param name="resampleThreshold" value="0.5"/>
+
+    <!-- Initial map size -->
+    <param name="xmin" value="-50.0"/>
+    <param name="ymin" value="-50.0"/>
+    <param name="xmax" value="50.0"/>
+    <param name="ymax" value="50.0"/>
+    <param name="delta" value="0.05"/>
+
+    <!-- Random particle parameters -->
+    <param name="llsamplerange" value="0.01"/>
+    <param name="llsamplestep" value="0.01"/>
+    <param name="lasamplerange" value="0.005"/>
+    <param name="lasamplestep" value="0.005"/>
+  </node>
+
+</launch>
+```
+
+### GMapping Parameter Tuning Guide
+
+```yaml
+# GMapping Parameter Configuration Guide
+
+# Basic Configuration
+slam_gmapping:
+  ros__parameters:
+    # Coordinate frames
+    base_frame: "base_link"
+    odom_frame: "odom"
+    map_frame: "map"
+    scan_topic: "scan"
+
+    # Map parameters
+    map_update_interval: 2.0          # Time between map updates (seconds)
+    resolution: 0.05                  # Map resolution (m/cell)
+    minimumScore: 50.0               # Minimum scan matching score
+
+    # Scan parameters
+    maxUrange: 12.0                  # Maximum usable range of laser
+    maxRange: 12.0                   # Maximum range of laser
+    sigma: 0.05                      # Scan matching error sigma
+    kernelSize: 1                    # Scan matching kernel size
+    lstep: 0.05                      # Scan matching linear step (m)
+    astep: 0.05                      # Scan matching angular step (rad)
+
+    # Particle filter parameters
+    particles: 30                    # Number of particles
+    srr: 0.01                        # Odometry error (linear/linear)
+    srt: 0.02                        # Odometry error (linear/angular)
+    str: 0.01                        # Odometry error (angular/linear)
+    stt: 0.02                        # Odometry error (angular/angular)
+
+    # Update thresholds
+    linearUpdate: 0.5                # Linear movement before update (m)
+    angularUpdate: 0.5               # Angular movement before update (rad)
+    temporalUpdate: 3.0              # Time threshold for update (s)
+
+    # Resampling
+    resampleThreshold: 0.5           # Resample threshold
+    xmin: -50.0                      # Initial map size
+    ymin: -50.0
+    xmax: 50.0
+    ymax: 50.0
+
+    # Likelihood sampling
+    llsamplerange: 0.01              # Translational sampling range
+    llsamplestep: 0.01               # Translational sampling step
+    lasamplerange: 0.005             # Angular sampling range
+    lasamplestep: 0.005              # Angular sampling step
+```
+
+## Cartographer Implementation
+
+### Cartographer Configuration
+
+Cartographer uses Lua configuration files that define the SLAM algorithm parameters:
+
+```lua
+-- cartographer_2d.lua
+-- Cartographer 2D SLAM Configuration
+
+options = {
+  map_builder = map_builder,
+  trajectory_builder = trajectory_builder,
+  map_frame = "map",
+  tracking_frame = "base_link",
+  published_frame = "odom",
+  odom_frame = "odom",
+  provide_odom_frame = true,
+  publish_frame_projected_to_2d = false,
+  use_odometry = true,
+  use_nav_sat = false,
+  use_landmarks = false,
+  num_laser_scans = 1,
+  num_multi_echo_laser_scans = 0,
+  num_subdivisions_per_laser_scan = 1,
+  num_imu_data = 0,
+  num_odometry_data = 1,
+  num_landmarks = 0,
+}
+
+MAP_BUILDER = {
+  use_trajectory_builder_2d = true,
+  num_background_threads = 4,
+  pose_graph = {
+    optimize_every_n_nodes = 320,
+    constraint_builder = {
+      sampling_ratio = 0.03,
+      max_constraint_distance = 15.,
+      min_score = 0.55,
+      global_localization_min_score = 0.6,
+      loop_closure_translation_threshold = 0.1,
+      loop_closure_rotation_threshold = math.rad(15.),
+      tf_preprocessing_time_limit = 0.05,
+      cached_position_weight = 1e-5,
+      loop_closure_weight = 1.1e4,
+      log_matches = true,
+    },
+    matcher_translation_weight = 5e2,
+    matcher_rotation_weight = 1.6e3,
+    optimization_problem = {
+      huber_scale = 1e1,
+      acceleration_weight = 1e3,
+      rotation_weight = 3e4,
+      local_slam_pose_translation_weight = 1e5,
+      local_slam_pose_rotation_weight = 1e5,
+      odometry_translation_weight = 1e2,
+      odometry_rotation_weight = 1e2,
+      fixed_frame_pose_translation_weight = 1e1,
+      fixed_frame_pose_rotation_weight = 1e2,
+      log_solver_summary = false,
+      use_online_imu_extrinsics_in_3d = true,
+      use_fixed_frame_pose_rescaling = true,
+      fixed_frame_pose_rescaling_factor = 1e2,
+    },
+    max_num_final_iterations = 200,
+    global_sampling_ratio = 0.003,
+    log_residual_histograms = true,
+    global_constraint_search_after_n_seconds = 10.,
+    global_constraint_search_space_max_radius = 1e3,
+    global_constraint_search_space_min_score_pose_graph = 0.5,
+    global_constraint_search_space_min_score_ceres_scan_matcher = 0.05,
+  },
+}
+
+TRAJECTORY_BUILDER_2D = {
+  min_range = 0.3,
+  max_range = 15.,
+  missing_data_ray_length = 5.,
+  num_accumulated_range_data = 1,
+  voxel_filter_size = 0.025,
+
+  adaptive_voxel_filter = {
+    max_length = 0.9,
+    min_num_points = 100,
+    max_range = 15.,
+  },
+
+  loop_closure_adaptive_voxel_filter = {
+    max_length = 0.9,
+    min_num_points = 100,
+    max_range = 15.,
+  },
+
+  use_online_correlative_scan_matching = true,
+  real_time_correlative_scan_matcher = {
+    linear_search_window = 0.1,
+    angular_search_window = math.rad(20.),
+    translation_delta_cost_weight = 1e-1,
+    rotation_delta_cost_weight = 1e-1,
+  },
+
+  ceres_scan_matcher = {
+    occupied_space_weight = 10.,
+    translation_weight = 10.,
+    rotation_weight = 1.,
+    ceres_solver_options = {
+      use_nonmonotonic_steps = false,
+      max_num_iterations = 20,
+      num_threads = 1,
+    },
+  },
+
+  motion_filter = {
+    max_time_seconds = 5.,
+    max_distance_meters = 0.2,
+    max_angle_radians = 0.004,
+  },
+
+  imu_gravity_time_constant = 10.,
+  pose_extrapolator_options = {
+    use_imu_based = false,
+    constant_velocity_model_translation_weight = 1e4,
+    constant_velocity_model_rotation_weight = 1e3,
+    imu_gravity_time_constant = 10.,
+    pose_queue_duration = 0.001,
+  },
+}
+```
+
+### Cartographer Launch File
+
+```xml
+<launch>
+  <!-- Cartographer SLAM Launch File -->
+
+  <!-- Cartographer node -->
+  <node pkg="cartographer_ros"
+        exec="cartographer_node"
+        name="cartographer_node"
+        output="screen"
+        args="-configuration_directory $(find-pkg-share my_robot_description)/config/cartographer
+              -configuration_basename cartographer_2d.lua">
+
+    <param name="use_sim_time" value="True"/>
+  </node>
+
+  <!-- Occupancy grid node -->
+  <node pkg="cartographer_ros"
+        exec="cartographer_occupancy_grid_node"
+        name="cartographer_occupancy_grid_node"
+        output="screen">
+    <param name="use_sim_time" value="True"/>
+    <param name="resolution" value="0.05"/>
+  </node>
+
+</launch>
+```
+
+## Advanced Cartographer Features
+
+### Cartographer with IMU Integration
+
+```lua
+-- cartographer_2d_imu.lua
+-- Cartographer 2D SLAM with IMU Integration
+
+options = {
+  map_builder = map_builder,
+  trajectory_builder = trajectory_builder,
+  map_frame = "map",
+  tracking_frame = "base_link",
+  published_frame = "odom",
+  odom_frame = "odom",
+  provide_odom_frame = true,
+  publish_frame_projected_to_2d = false,
+  use_odometry = true,
+  use_nav_sat = false,
+  use_landmarks = false,
+  num_laser_scans = 1,
+  num_multi_echo_laser_scans = 0,
+  num_subdivisions_per_laser_scan = 1,
+  num_imu_data = 1,  -- Enable IMU
+  num_odometry_data = 1,
+  num_landmarks = 0,
+}
+
+MAP_BUILDER = {
+  use_trajectory_builder_2d = true,
+  num_background_threads = 4,
+  pose_graph = {
+    optimize_every_n_nodes = 320,
+    constraint_builder = {
+      sampling_ratio = 0.03,
+      max_constraint_distance = 15.,
+      min_score = 0.55,
+      global_localization_min_score = 0.6,
+      loop_closure_translation_threshold = 0.1,
+      loop_closure_rotation_threshold = math.rad(15.),
+      tf_preprocessing_time_limit = 0.05,
+      cached_position_weight = 1e-5,
+      loop_closure_weight = 1.1e4,
+      log_matches = true,
+    },
+    matcher_translation_weight = 5e2,
+    matcher_rotation_weight = 1.6e3,
+    optimization_problem = {
+      huber_scale = 1e1,
+      acceleration_weight = 1e3,
+      rotation_weight = 3e4,
+      local_slam_pose_translation_weight = 1e5,
+      local_slam_pose_rotation_weight = 1e5,
+      odometry_translation_weight = 1e2,
+      odometry_rotation_weight = 1e2,
+      fixed_frame_pose_translation_weight = 1e1,
+      fixed_frame_pose_rotation_weight = 1e2,
+      log_solver_summary = false,
+      use_online_imu_extrinsics_in_3d = true,
+      use_fixed_frame_pose_rescaling = true,
+      fixed_frame_pose_rescaling_factor = 1e2,
+    },
+    max_num_final_iterations = 200,
+    global_sampling_ratio = 0.003,
+    log_residual_histograms = true,
+    global_constraint_search_after_n_seconds = 10.,
+    global_constraint_search_space_max_radius = 1e3,
+    global_constraint_search_space_min_score_pose_graph = 0.5,
+    global_constraint_search_space_min_score_ceres_scan_matcher = 0.05,
+  },
+}
+
+TRAJECTORY_BUILDER_2D = {
+  min_range = 0.3,
+  max_range = 15.,
+  missing_data_ray_length = 5.,
+  num_accumulated_range_data = 1,
+  voxel_filter_size = 0.025,
+
+  adaptive_voxel_filter = {
+    max_length = 0.9,
+    min_num_points = 100,
+    max_range = 15.,
+  },
+
+  loop_closure_adaptive_voxel_filter = {
+    max_length = 0.9,
+    min_num_points = 100,
+    max_range = 15.,
+  },
+
+  use_online_correlative_scan_matching = true,
+  real_time_correlative_scan_matcher = {
+    linear_search_window = 0.1,
+    angular_search_window = math.rad(20.),
+    translation_delta_cost_weight = 1e-1,
+    rotation_delta_cost_weight = 1e-1,
+  },
+
+  ceres_scan_matcher = {
+    occupied_space_weight = 10.,
+    translation_weight = 10.,
+    rotation_weight = 1.,
+    ceres_solver_options = {
+      use_nonmonotonic_steps = false,
+      max_num_iterations = 20,
+      num_threads = 1,
+    },
+  },
+
+  motion_filter = {
+    max_time_seconds = 5.,
+    max_distance_meters = 0.2,
+    max_angle_radians = 0.004,
+  },
+
+  imu_gravity_time_constant = 10.,  -- IMU gravity constant
+  pose_extrapolator_options = {
+    use_imu_based = true,  -- Enable IMU-based extrapolation
+    constant_velocity_model_translation_weight = 1e4,
+    constant_velocity_model_rotation_weight = 1e3,
+    imu_gravity_time_constant = 10.,
+    pose_queue_duration = 0.001,
+  },
+}
+```
+
+## Performance Comparison and Tuning
+
+### SLAM Performance Evaluation Node
+
+```python
+#!/usr/bin/env python3
+
+"""
+SLAM Performance Comparison Node
+Compare GMapping and Cartographer performance metrics
+"""
+
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import OccupancyGrid, Odometry
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from std_msgs.msg import Float64, String
+import numpy as np
+import math
+from typing import Dict, List
+
+
+class SlamPerformanceEvaluator(Node):
+    def __init__(self):
+        super().__init__('slam_performance_evaluator')
+
+        # Subscribers for both SLAM systems
+        self.gmapping_map_sub = self.create_subscription(
+            OccupancyGrid, 'gmapping_map', self.gmapping_map_callback, 10
+        )
+        self.cartographer_map_sub = self.create_subscription(
+            OccupancyGrid, 'cartographer_map', self.cartographer_map_callback, 10
+        )
+        self.gmapping_pose_sub = self.create_subscription(
+            PoseWithCovarianceStamped, 'gmapping_pose', self.gmapping_pose_callback, 10
+        )
+        self.cartographer_pose_sub = self.create_subscription(
+            PoseWithCovarianceStamped, 'cartographer_pose', self.cartographer_pose_callback, 10
+        )
+
+        # Publishers for performance metrics
+        self.gmapping_metrics_pub = self.create_publisher(String, 'gmapping_metrics', 10)
+        self.cartographer_metrics_pub = self.create_publisher(String, 'cartographer_metrics', 10)
+        self.comparison_pub = self.create_publisher(String, 'slam_comparison', 10)
+
+        # Storage for metrics
+        self.gmapping_data = {
+            'map_coverage': 0.0,
+            'path_length': 0.0,
+            'pose_uncertainty': 0.0,
+            'update_times': [],
+            'poses': []
+        }
+
+        self.cartographer_data = {
+            'map_coverage': 0.0,
+            'path_length': 0.0,
+            'pose_uncertainty': 0.0,
+            'update_times': [],
+            'poses': []
+        }
+
+        # Timing
+        self.last_time = self.get_clock().now()
+
+        self.get_logger().info('SLAM Performance Evaluator initialized')
+
+    def gmapping_map_callback(self, msg):
+        """Process GMapping map data"""
+        coverage = self.calculate_map_coverage(msg)
+        self.gmapping_data['map_coverage'] = coverage
+
+    def cartographer_map_callback(self, msg):
+        """Process Cartographer map data"""
+        coverage = self.calculate_map_coverage(msg)
+        self.cartographer_data['map_coverage'] = coverage
+
+    def gmapping_pose_callback(self, msg):
+        """Process GMapping pose data"""
+        pose = [msg.pose.pose.position.x, msg.pose.pose.position.y]
+        self.gmapping_data['poses'].append(pose)
+
+        # Calculate path length
+        if len(self.gmapping_data['poses']) > 1:
+            prev_pose = self.gmapping_data['poses'][-2]
+            dist = math.sqrt((pose[0] - prev_pose[0])**2 + (pose[1] - prev_pose[1])**2)
+            self.gmapping_data['path_length'] += dist
+
+        # Calculate uncertainty from covariance
+        cov = msg.pose.covariance
+        uncertainty = math.sqrt(cov[0] + cov[7])  # x and y covariance
+        self.gmapping_data['pose_uncertainty'] = uncertainty
+
+    def cartographer_pose_callback(self, msg):
+        """Process Cartographer pose data"""
+        pose = [msg.pose.pose.position.x, msg.pose.pose.position.y]
+        self.cartographer_data['poses'].append(pose)
+
+        # Calculate path length
+        if len(self.cartographer_data['poses']) > 1:
+            prev_pose = self.cartographer_data['poses'][-2]
+            dist = math.sqrt((pose[0] - prev_pose[0])**2 + (pose[1] - prev_pose[1])**2)
+            self.cartographer_data['path_length'] += dist
+
+        # Calculate uncertainty from covariance
+        cov = msg.pose.covariance
+        uncertainty = math.sqrt(cov[0] + cov[7])  # x and y covariance
+        self.cartographer_data['pose_uncertainty'] = uncertainty
+
+    def calculate_map_coverage(self, map_msg):
+        """Calculate map coverage percentage"""
+        if len(map_msg.data) == 0:
+            return 0.0
+
+        # Count known cells (not -1)
+        known_cells = sum(1 for cell in map_msg.data if cell != -1)
+        total_cells = len(map_msg.data)
+
+        return (known_cells / total_cells) * 100 if total_cells > 0 else 0.0
+
+    def publish_metrics(self):
+        """Publish performance metrics"""
+        # Calculate current time difference
+        current_time = self.get_clock().now()
+        time_diff = (current_time.nanoseconds - self.last_time.nanoseconds) / 1e9
+        self.last_time = current_time
+
+        # GMapping metrics
+        gmapping_metrics = f"GMapping - Coverage: {self.gmapping_data['map_coverage']:.1f}%, " \
+                          f"Path: {self.gmapping_data['path_length']:.2f}m, " \
+                          f"Uncertainty: {self.gmapping_data['pose_uncertainty']:.3f}m"
+
+        gmapping_msg = String()
+        gmapping_msg.data = gmapping_metrics
+        self.gmapping_metrics_pub.publish(gmapping_msg)
+
+        # Cartographer metrics
+        cartographer_metrics = f"Cartographer - Coverage: {self.cartographer_data['map_coverage']:.1f}%, " \
+                              f"Path: {self.cartographer_data['path_length']:.2f}m, " \
+                              f"Uncertainty: {self.cartographer_data['pose_uncertainty']:.3f}m"
+
+        cartographer_msg = String()
+        cartographer_msg.data = cartographer_metrics
+        self.cartographer_metrics_pub.publish(cartographer_msg)
+
+        # Comparison
+        coverage_diff = self.cartographer_data['map_coverage'] - self.gmapping_data['map_coverage']
+        uncertainty_diff = self.gmapping_data['pose_uncertainty'] - self.cartographer_data['pose_uncertainty']
+
+        comparison = f"Comparison - Cartographer better by: Coverage {coverage_diff:.1f}%, " \
+                    f"Uncertainty {uncertainty_diff:.3f}m (lower is better)"
+
+        comparison_msg = String()
+        comparison_msg.data = comparison
+        self.comparison_pub.publish(comparison_msg)
+
+        self.get_logger().info(comparison)
+
+    def get_current_metrics(self):
+        """Get current performance metrics"""
+        return {
+            'gmapping': self.gmapping_data.copy(),
+            'cartographer': self.cartographer_data.copy()
+        }
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    evaluator = SlamPerformanceEvaluator()
+
+    # Timer to periodically publish metrics
+    timer = evaluator.create_timer(2.0, evaluator.publish_metrics)
+
+    try:
+        rclpy.spin(evaluator)
+    except KeyboardInterrupt:
+        evaluator.get_logger().info('Shutting down SLAM performance evaluator')
+    finally:
+        evaluator.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## SLAM System Integration
+
+### Multi-SLAM Manager Node
+
+```python
+#!/usr/bin/env python3
+
+"""
+Multi-SLAM Manager
+Manages both GMapping and Cartographer systems
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool, String
+import subprocess
+import time
+from typing import Optional
+
+
+class MultiSlamManager(Node):
+    def __init__(self):
+        super().__init__('multi_slam_manager')
+
+        # Subscribers
+        self.scan_sub = self.create_subscription(
+            LaserScan, 'scan', self.scan_callback, 10
+        )
+        self.odom_sub = self.create_subscription(
+            Odometry, 'odom', self.odom_callback, 10
+        )
+
+        # Publishers
+        self.status_pub = self.create_publisher(String, 'slam_status', 10)
+        self.active_slam_pub = self.create_publisher(String, 'active_slam_system', 10)
+
+        # SLAM control
+        self.active_slam = 'gmapping'  # 'gmapping' or 'cartographer'
+        self.system_status = {
+            'gmapping': 'stopped',
+            'cartographer': 'stopped'
+        }
+
+        # Environment assessment
+        self.linear_speed = 0.0
+        self.angular_speed = 0.0
+        self.laser_variance = 0.0
+
+        # Timer for system switching
+        self.switch_timer = self.create_timer(5.0, self.assess_environment_and_switch)
+
+        self.get_logger().info('Multi-SLAM Manager initialized')
+
+    def scan_callback(self, msg):
+        """Process laser scan for environment assessment"""
+        # Calculate laser data variance as measure of environment complexity
+        valid_ranges = [r for r in msg.ranges if not (math.isinf(r) or math.isnan(r))]
+        if len(valid_ranges) > 1:
+            self.laser_variance = np.var(valid_ranges)
+
+    def odom_callback(self, msg):
+        """Process odometry for motion assessment"""
+        # Extract linear and angular velocities
+        self.linear_speed = math.sqrt(
+            msg.twist.twist.linear.x**2 +
+            msg.twist.twist.linear.y**2 +
+            msg.twist.twist.linear.z**2
+        )
+        self.angular_speed = math.sqrt(
+            msg.twist.twist.angular.x**2 +
+            msg.twist.twist.angular.y**2 +
+            msg.twist.twist.angular.z**2
+        )
+
+    def assess_environment_and_switch(self):
+        """Assess environment and switch SLAM systems if needed"""
+        # Decision logic based on environment characteristics
+        high_motion = self.linear_speed > 0.3 or self.angular_speed > 0.3
+        complex_env = self.laser_variance > 5.0  # High variance indicates complex environment
+        fast_motion = self.linear_speed > 0.5
+
+        # Switching logic
+        if fast_motion and complex_env:
+            target_system = 'cartographer'
+        elif high_motion:
+            target_system = 'cartographer'
+        else:
+            target_system = 'gmapping'
+
+        if target_system != self.active_slam:
+            self.switch_slam_system(target_system)
+
+        # Publish status
+        status_msg = String()
+        status_msg.data = f"Active: {self.active_slam}, G: {self.linear_speed:.2f}, A: {self.angular_speed:.2f}, Var: {self.laser_variance:.2f}"
+        self.status_pub.publish(status_msg)
+
+        active_msg = String()
+        active_msg.data = self.active_slam
+        self.active_slam_pub.publish(active_msg)
+
+    def switch_slam_system(self, new_system):
+        """Switch between SLAM systems"""
+        self.get_logger().info(f'Switching from {self.active_slam} to {new_system}')
+
+        # Stop current system
+        self.stop_slam_system(self.active_slam)
+
+        # Start new system
+        self.start_slam_system(new_system)
+
+        self.active_slam = new_system
+
+    def start_slam_system(self, system_name):
+        """Start a SLAM system"""
+        if system_name == 'gmapping':
+            # Start GMapping (in practice, this would launch the actual node)
+            self.system_status['gmapping'] = 'running'
+            self.get_logger().info('Started GMapping')
+        elif system_name == 'cartographer':
+            # Start Cartographer (in practice, this would launch the actual node)
+            self.system_status['cartographer'] = 'running'
+            self.get_logger().info('Started Cartographer')
+
+    def stop_slam_system(self, system_name):
+        """Stop a SLAM system"""
+        if system_name == 'gmapping':
+            self.system_status['gmapping'] = 'stopped'
+            self.get_logger().info('Stopped GMapping')
+        elif system_name == 'cartographer':
+            self.system_status['cartographer'] = 'stopped'
+            self.get_logger().info('Stopped Cartographer')
+
+    def get_active_system(self):
+        """Get the currently active SLAM system"""
+        return self.active_slam
+
+    def get_system_status(self):
+        """Get status of all SLAM systems"""
+        return self.system_status
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    manager = MultiSlamManager()
+
+    try:
+        rclpy.spin(manager)
+    except KeyboardInterrupt:
+        manager.get_logger().info('Shutting down Multi-SLAM Manager')
+    finally:
+        # Stop all systems on shutdown
+        manager.stop_slam_system(manager.active_slam)
+        manager.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    import math
+    import numpy as np
+    main()
+```
+
+## Key Considerations for SLAM Selection
+
+### 1. Environment Characteristics
+
+- **Structured Environments**: GMapping works well in hallways, offices
+- **Complex Environments**: Cartographer better for cluttered, dynamic spaces
+- **Outdoor Environments**: Consider additional sensors for robust mapping
+
+### 2. Computational Requirements
+
+- **GMapping**: Lower CPU usage, suitable for embedded systems
+- **Cartographer**: Higher CPU usage, better for more powerful platforms
+- **Memory Usage**: Cartographer typically uses more memory for optimization
+
+### 3. Sensor Availability
+
+- **Good Odometry Required**: GMapping depends on accurate odometry
+- **Multi-sensor Friendly**: Cartographer can work with fewer sensors
+- **IMU Integration**: Cartographer better utilizes IMU data
+
+## Quiz: GMapping & Cartographer
+
+1. Which SLAM system uses a particle filter approach?
+2. What type of scan matching does Cartographer use?
+3. Name one advantage of GMapping over Cartographer.
+4. Name one advantage of Cartographer over GMapping.
+5. What Lua configuration files are used in Cartographer?
+
+## Hands-On Challenge
+
+Create a SLAM system selector that:
+1. Analyzes environment characteristics in real-time
+2. Automatically switches between GMapping and Cartographer based on conditions
+3. Evaluates the quality of maps produced by each system
+4. Provides recommendations for optimal SLAM system selection
+
+## Summary
+
+This chapter covered two leading SLAM implementations:
+- GMapping: Particle filter-based 2D laser SLAM with good performance in structured environments
+- Cartographer: Advanced multi-sensor SLAM with superior optimization and mapping quality
+- Configuration and tuning for different applications
+- Performance comparison and system selection criteria
+
+## Further Reading
+
+- GMapping ROS Package Documentation
+- Cartographer ROS Integration Guide
+- Comparative Analysis of SLAM Systems
+- SLAM Parameter Tuning Best Practices
+
+## Next Chapter Preview
+
+Chapter 20 will explore RTAB-Map, a versatile RGB-D SLAM system that uses visual and depth information for mapping and localization in indoor environments.

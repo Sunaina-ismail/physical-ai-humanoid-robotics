@@ -1,0 +1,477 @@
+---
+title: "باب 1: فزکل ای متعارف (Introduction to Physical AI)"
+chapter_number: "1.1"
+module: 1
+sidebar_position: 1
+prerequisites:
+  - "پائی تھون (Python) بنیادیں (فنکشن، کلاسز، امپورٹس)"
+  - "کمانڈ لائن (Command-line) بنیادیں (ٹرمنل نیویگیشن، اسکرپٹ چلانا)"
+learning_outcomes:
+  - "تنگ ای (narrow AI)، کلاؤڈ ای (cloud AI)، اور جسمانی فزکل ای (embodied Physical AI) کے درمیان فرق کو سمجھنا"
+  - "وہ سینسر-ادراک-ایکشن لوپ (sensor-perception-action loop) کی وضاحت کرنا جو فزکل ای سسٹمز کو قابل بناتا ہے"
+  - "تین حقیقی دنیا کے ہیومنوائڈ روبوٹ پلیٹ فارم (humanoid robot platforms) اور ان کے استعمال کے معاملات (use cases) کی شناخت کرنا"
+  - "جواز دینا کہ سیمولیشن-فرسٹ نقطہ نظر (simulation-first approaches) روبوٹکس سیکھنے کے لیے ضروری کیوں ہے"
+estimated_time: 45
+tier_support:
+  A: true
+  B: false
+  C: false
+tags: ["physical-ai", "concepts", "fundamentals", "embodied-ai"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# باب 1: فزکل ای متعارف (Introduction to Physical AI)
+
+<PrerequisiteCheck prerequisites={[
+  "پائی تھون (Python) بنیادیں (فنکشن، کلاسز، امپورٹس)",
+  "کمانڈ لائن (Command-line) بنیادیں (ٹرمنل نیویگیشن، اسکرپٹ چلانا)"
+]} />
+
+## یہ کیوں اہم ہے (Why This Matters)
+
+آپ نے ممکنہ طور پر چیٹ جی پی ٹی (ChatGPT) یا دیگر لینگویج ماڈلز (language models) کے ساتھ تعامل کیا ہو گا جو متاثر کن فلوئینسی (fluency) کے ساتھ ٹیکسٹ کو سمجھتے ہیں اور پیدا کرتے ہیں۔ لیکن تصور کریں کہ ایک ای ای صرف کافی بنانے کے بارے میں بات نہیں کرتا ہے— یہ دراصل ایک کچن میں داخل ہوتا ہے، ایک کافی پاٹ تھامتا ہے، پانی ڈالتا ہے، اور آپ کو ایک ابھی ابھی کا گلاس دیتا ہے۔ یہ **فزکل ای** ہے: وہ ذہانت جو روبوٹس (robots) میں جسمانی ہوتی ہے جو حقیقی دنیا میں ادراک کرتی ہے اور عمل کرتی ہے۔
+
+کمپنیاں جیسے ٹیسلا (Tesla) (آپٹیمس (Optimus) کے ساتھ)، فیگر ای آئی (Figure AI) (فیگر 02)، اور یونیٹری (Unitree) (جی1 ہیومنوائڈ) جنرل پرپز ہیومنوائڈ روبوٹس تیار کرنے کی دوڑ میں ہیں جو گھروں، گوداموں، اور فیکٹریوں میں انسانوں کے ساتھ کام کر سکیں۔ یہ روبوٹس ڈیٹا سینٹر (data centers) میں نہیں چلتے ہیں— وہ الجھے ہوئے فلورز کو نیویگیٹ (navigate) کرتے ہیں، نازک اشیاء کو مینیپولیٹ (manipulate) کرتے ہیں، اور غیر متوقع ٹکڑوں سے بحال ہوتے ہیں۔ یہ سسٹمز بنانے اور پروگرام کرنا سیکھنا 2000 کی دہائی میں ویب ڈیولپمنٹ (web development) کے بنیاد کے طور پر ہونے لگا ہے۔
+
+یہ باب آپ کو فزکل ای میں بنیادی تصورات، چیلنجز، اور مواقع سے متعارف کراتا ہے، اس ٹیکسٹ بک کے ذریعے آپ کے ہاتھوں سے ہونے والے سفر کے لیے اسٹیج سیٹ کر رہا ہے۔
+
+---
+
+## مثلاً: خودکار ڈرائیونگ چیف (Analogy: The Self-Driving Chef)
+
+**روزانہ کا منظر (Everyday Scenario)**:
+
+تصور کریں کہ آپ ایک مہارت رکھنے والے چیف کو ایک پیچیدہ ڈش تیار کرتے دیکھ رہے ہیں۔ چیف:
+1. **دیکھتا ہے** اجزاء کو اپنی آنکھوں سے اور انہیں چھوتا ہے تاکہ تازگی کا جائزہ لے (سینسرز (sensors))
+2. **شناخت کرتا ہے** وہ کیا دیکھ رہا ہے: "یہ ٹماٹر riped ہے، وہ چاقو تیز ہے" (ادراک (perception))
+3. **فیصلہ کرتا ہے** اگلے قدم پر: "میں ٹماٹر کو dice کروں گا، پھر اسے sauté کروں گا" (منصوبہ بندی (planning))
+4. **عمل کرتا ہے** درست چاقو کے حرکات اور پین کنٹرول (اعصاب/ایکچوایٹرز (actuators/actuators) کے ذریعے)
+5. **ایڈجسٹ** کرتا ہے ریل ٹائم (real-time) میں: اگر پین بہت گرم ہو جاتا ہے، تو وہ فلیم کم کر دیتا ہے؛ اگر ایک ٹماٹر کا ٹکڑا گر جاتا ہے، تو وہ اسے تھام لیتا ہے (جاری فیڈ بیک لوپ (continuous feedback loop))
+
+چیف کھانا پکاتا نہیں ہے صرف ایک ریسیپ کو الفاظ کے الفاظ پڑھ کر بغیر کھانے کو دیکھے۔ وہ *جاری سینس، تھنک، اور ایکٹ* کرتا ہے جسمانی دنیا کے جواب میں۔
+
+**کنکشن (The Connection)**:
+
+ایک فزکل ای روبوٹ بالکل اسی چیف کی طرح کام کرتا ہے:
+- **سینسرز (Sensors)** (کیمرے، لیڈار، فورس سینسرز) چیف کی آنکھوں اور چھوٹ کی جگہ لیتے ہیں
+- **ادراک الگورتھم (Perception algorithms)** (کمپیوٹر وژن (computer vision)، SLAM) چیف کی چیزوں اور جگہوں کو پہچاننے کی صلاحیت کی جگہ لیتے ہیں
+- **منصوبہ بندی سسٹم (Planning systems)** (موشن پلانرز (motion planners)، LLMs) چیف کے فیصلہ سازی کی جگہ لیتے ہیں
+- **ایکچوایٹرز (Actuators)** (موٹر، گریپرز) چیف کے مسلز کی جگہ لیتے ہیں
+- **سینسر-ایکشن لوپ (The sensor-action loop)** جاری طور پر چلتا ہے، بالکل ویسے ہی جیسے چیف کی آنکھیں-دماغ-ہاتھ کی تال میل
+
+**جہاں مثلاً ناکام ہوتی ہے (Where the Analogy Breaks Down)**:
+
+ایک انسانی چیف کے مقابلے میں جو سالوں کے تجربے سے سیکھتا ہے، فزکل ای روبوٹس اکثر لاکھوں سیمولیٹڈ دہراؤ سے سیکھتے ہیں پہلے کہ حقیقی اجزاء کو چھو سکیں۔ ایک چیف اچانک اجزاء کے ساتھ تخلیقی طور پر ایڈ لب کر سکتا ہے؛ موجودہ روبوٹس نئے منظر ناموں سے باہر اپنے تربیتی ڈیٹا کے ساتھ مشکل میں پڑ جاتے ہیں۔ اور ایک چیف کے "سینسرز" (آنکھیں، چھوٹ) زیادہ تر روبوٹک سینسرز سے کہیں زیادہ ترقی یافتہ ہیں—ابھی تک۔
+
+**روبوٹکس کی اصطلاحات میں (In Robotics Terms)**:
+
+**فزکل ای** (جسے **ایمبیڈیڈ ای (Embodied AI)** بھی کہا جاتا ہے) وہ مصنوعی ذہانت ہے جو سینسرز (sensors) کے ذریعے جسمانی دنیا کا ادراک کرتی ہے، اس حسی ڈیٹا کی بنیاد پر فیصلے کرتی ہے، اور ایکچوایٹرز (actuators) (موٹر، گریپرز، پہیوں) کے ذریعے ماحول پر عمل کرتی ہے۔ تنگ ای سسٹم (narrow AI systems) کے مقابلے جو صرف ڈیجیٹل جگہوں میں کام کرتے ہیں (جیسے ٹیکسٹ جنریشن یا امیج کلاسیفکیشن)، فزکل ای حقیقی دنیا میں ادراک اور عمل کے لوپ کو بند کرتا ہے۔
+
+---
+
+## بنیادی تصورات (Core Concepts)
+
+### 1. فزکل ای کیا ہے؟ (What is Physical AI?)
+
+**فزکل ای** روبوٹک ہارڈ ویئر (robotic hardware) کے ساتھ مصنوعی ذہانت (artificial intelligence) کا ایک انضمام ہے جو ایسے سسٹم تیار کرتا ہے جو:
+1. **سینس** کرتا ہے ماحول کو (کیمرے، لیڈار، IMUs، فورس سینسرز)
+2. **ادراک** کرتا ہے حساس ڈیٹا سے مطلب کی معلومات (آبجیکٹ ڈیٹیکشن (object detection)، لوکلائزیشن (localization))
+3. **منصوبہ بندی** کرتا ہے اہداف کے حصول کے لیے ایکشنز (پاتھ پلاننگ (path planning)، ٹاسک پلاننگ (task planning))
+4. **ایکٹ** کرتا ہے جسمانی ایکچوایٹرز (physical actuators) (موٹر، گریپرز، موبل بیسز) کے ذریعے
+5. **سیکھتا** ہے جسمانی دنیا (physical world) کے ساتھ تعامل سے (ریفورسمنٹ لرننگ (reinforcement learning)، امیٹیشن لرننگ (imitation learning))
+
+**دیگر ای آئی اقسام سے کلیدی فرق (Key Distinction from Other AI Types)**:
+
+| ای آئی قسم (AI Type) | ان پٹ (Input) | آؤٹ پٹ (Output) | جسمانی تعامل (Physical Interaction) |
+|---------|-------|--------|---------------------|
+| **تنگ ای (Narrow AI)** | ٹیکسٹ، امیج، سٹرکچرڈ ڈیٹا | پریڈکشنز، کلاسیفکیشن | کوئی نہیں (purely digital) |
+| **کلاؤڈ ای (Cloud AI)** | یوزر کوئریز، ڈیٹا سٹریمز | ریسپانسز، ریکومنڈیشنز | کوئی نہیں (runs on remote servers) |
+| **فزکل ای (Physical AI)** | سینسر ڈیٹا (کیمرے، لیڈار، فورس) | موٹر کمانڈز، ایکشنز | **ہاں** (affects real world) |
+
+**مثال (Example)**: چیٹ جی پی ٹی (ChatGPT) تنگ/کلاؤڈ ای ہے— یہ ٹیکسٹ کو پروسیس (process) کرتا ہے اور ٹیکسٹ پیدا کرتا ہے۔ ایک ٹیسلا آپٹیمس (Tesla Optimus) روبوٹ (robot) لینا فولڈ کرنا فزکل ای ہے— یہ کیمرے کے ساتھ فیبرک دیکھتا ہے، گریپ پوائنٹس کا منصوبہ بنا لیتا ہے، اور کپڑوں کو مینیپولیٹ (manipulate) کرنے کے لیے موٹر کنٹرول کرتا ہے۔
+
+---
+
+### 2. سینسر-ادراک-ایکشن لوپ (The Sensor-Perception-Action Loop)
+
+فزکل ای میں بنیادی پیٹرن **جاری سینسر-ادراک-ایکشن لوپ** ہے:
+
+<MermaidDiagram
+  id="diagram-1-1-sensor-loop"
+  type="flow"
+  source={`
+    flowchart LR
+      A[Sensors<br/>Cameras, LiDAR, IMU] --> B[Perception<br/>Object Detection, SLAM]
+      B --> C[Planning<br/>Path Planning, Task Planning]
+      C --> D[Action<br/>Motor Commands]
+      D --> E[Actuators<br/>Motors, Grippers]
+      E -.Physical Feedback.-> A
+
+      style A fill:#e1f5ff
+      style B fill:#fff4e1
+      style C fill:#f0ffe1
+      style D fill:#ffe1f5
+      style E fill:#ffe1e1
+  `}
+  altText="Physical AI sensor-action loop showing five connected stages: Sensors collect raw data (cameras, LiDAR, IMU), Perception processes it into meaningful information (object detection, SLAM), Planning decides what actions to take (path planning, task planning), Action translates plans into motor commands, and Actuators execute those commands (motors, grippers). Actuators create physical changes in the environment, which sensors then detect, creating a continuous feedback loop."
+  caption="شکل 1.1: فزکل ای سینسر-ادراک-ایکشن لوپ (Figure 1.1: The Physical AI Sensor-Perception-Action Loop)"
+/>
+
+**کیوں یہ لوپ اہم ہے (Why This Loop Matters)**:
+
+روایتی سافٹ ویئر (traditional software) میں، آپ کوڈ لکھتے ہیں جو ایک بار چلتا ہے یا ڈسکریٹ ایونٹس (discrete events) (جیسے بٹن کلک) کے جواب میں چلتا ہے۔ فزکل ای میں، یہ لوپ **جاری** طور پر زیادہ فریکوئنسیز (high frequencies) (اکثر 10-100 بار فی سیکنڈ) پر چلتا ہے کیونکہ دنیا ہمیشہ تبدیل ہوتی رہتی ہے:
+- ایک شخص روبوٹ کے سامنے چلا جا سکتا ہے
+- ایک چیز گریپر سے پھسل سکتی ہے
+- فلور ناہموار ہو سکتا ہے، توازن کی ایڈجسٹمنٹ کی ضرورت ہو سکتی ہے
+
+روبوٹ کو **ریل ٹائم (real-time)** میں ادراک، منصوبہ بندی، اور عمل کرنا چاہیے تاکہ وہ محفوظ اور مؤثر رہے۔
+
+---
+
+### 3. حقیقی دنیا کے فزکل ای پلیٹ فارم (Real-World Physical AI Platforms)
+
+**ٹیئر A نوٹ (Tier A Note)**: آپ اس ٹیکسٹ بک میں ان روبوٹس کے سیمولیٹڈ ورژن (simulated versions) کے ساتھ کام کریں گے۔ حقیقی سسٹم کو سمجھنا آپ کو کچھ تکنیکوں کو سیکھنے کی حوصلہ افزائی کرتا ہے۔
+
+#### ٹیسلا آپٹیمس (جین 2) (Tesla Optimus (Gen 2))
+- **مقصد (Purpose)**: جنرل-پرپز ہیومنوائڈ (general-purpose humanoid) کے لیے مینوفیکچرنگ (manufacturing) اور گھر کے کاموں (home tasks)
+- **اہم خصوصیات (Key Features)**: 28 ڈگریز آف فریڈم (degrees of freedom)، 11 DoF کے ساتھ ہاتھ، کسٹم ایکچوایٹرز (custom actuators)
+- **استعمال کے معاملات (Use Cases)**: فیکٹری آٹومیشن (factory automation)، گھریلو کام (household chores)، بوڑھے دیکھ بھال کی مدد (eldercare assistance)
+- **چیلنج (Challenge)**: Dexterous manipulation (folding clothes, picking up fragile objects)
+
+#### فیگر 02 (Figure 02)
+- **مقصد (Purpose)**: گودام (warehouse) اور لاگسٹکس (logistics) آٹومیشن
+- **اہم خصوصیات (Key Features)**: مکمل ہیومنوائڈ فارم (full humanoid form)، جدید وژن-لینگویج-ایکشن (advanced vision-language-action) (VLA) انضمام (integration)
+- **استعمال کے معاملات (Use Cases)**: باکس سارٹنگ (box sorting)، pallet handling، human-robot collaboration
+- **چیلنج (Challenge)**: نیویگیشن (navigation) میں ڈائنامک گودام (dynamic warehouse) ماحول (environments) میں انسان (humans) اور forklifts کے ساتھ
+
+#### یونیٹری جی1 (Unitree G1)
+- **مقصد (Purpose)**: تحقیق (research) اور تعلیم (education) پلیٹ فارم (platform) کے لیے اعلی حرکت (advanced mobility)
+- **اہم خصوصیات (Key Features)**: 23-43 ڈگریز آف فریڈم (degrees of freedom) (ورینٹس)، 2m/s چلنے کی رفتار، force control
+- **استعمال کے معاملات (Use Cases)**: تحقیقی لیبز (research labs)، یونیورسٹی روبوٹکس کورسز (university robotics courses)، agile locomotion research
+- **چیلنج (Challenge)**: ڈائنامک بیلنس (dynamic balance) on uneven terrain، whole-body coordination
+
+**ہیومنوائڈ فارم کیوں؟ (Why Humanoid Form?)**
+
+ہیومنوائڈ روبوٹس (humanoid robots) (دو ٹانگیں، دو ہاتھ، عمودی ٹورسو) کو انسانی ماحول (human environments) میں کام کرنے کے لیے ڈیزائن کیا گیا ہے— سیڑھیاں، دروازے، الماریاں— بغیر انفراسٹرکچر (infrastructure) تبدیلی کے ضرورت ہو۔ ایک wheeled robot can't climb stairs; a humanoid can (in theory). This makes humanoids versatile but mechanically and algorithmically complex.
+
+---
+
+### 4. کیوں سیمولیشن-فرسٹ؟ تین ٹیئر نقطہ نظر (Why Simulation-First? The Three-Tier Approach)
+
+**مسئلہ (The Problem)**: Physical robots are expensive ($10,000 - $150,000+), fragile (a bad motion command can damage motors), and slow to iterate (you must physically reset environments between tests).
+
+**حل (The Solution)**: Learn in **simulation** first, then deploy to real hardware.
+
+<MermaidDiagram
+  id="diagram-1-1-three-tiers"
+  type="graph"
+  source={`
+    graph TD
+      A[Tier A: Simulation<br/>Laptop, CPU-only] -->|Skills Validated| B[Tier B: Edge AI<br/>Jetson + Sensors]
+      B -->|Real Sensors Integrated| C[Tier C: Physical Robot<br/>Unitree G1/Go2]
+
+      A -.Mandatory for All Learners.-> A
+      B -.Optional Extension.-> B
+      C -.Optional Extension.-> C
+
+      style A fill:#90EE90
+      style B fill:#FFD700
+      style C fill:#FF6347
+  `}
+  altText="Three-tier learning progression: Tier A (Simulation on laptop, CPU-only) is mandatory for all learners and serves as the foundation. Tier B (Edge AI with Jetson and real sensors) is an optional extension that validates skills with real sensors. Tier C (Physical Robot deployment on Unitree G1 or Go2) is the final optional extension where learners deploy to real hardware. Arrows show progression from Tier A to B to C."
+  caption="Figure 1.2: The Three-Tier Learning Approach"
+/>
+
+**Tier A: Simulation (This Textbook's Core)**
+- **Hardware**: Your laptop (CPU-only, no GPU required)
+- **Tools**: Gazebo, ROS 2, Python, conceptual Isaac Sim exercises
+- **Benefits**:
+  - Iterate rapidly (reload simulation in seconds)
+  - No risk of hardware damage
+  - Free and accessible to all learners
+  - Test dangerous scenarios safely (robot falling, collisions)
+
+**Tier B: Edge AI (Optional Extension)**
+- **Hardware**: NVIDIA Jetson Nano/Orin ($99-$499)
+- **Tools**: Real cameras, IMUs, LiDAR connected to Jetson
+- **Benefits**:
+  - Learn sim-to-real transfer (how simulated algorithms behave with real sensor noise)
+  - Understand edge computing constraints (limited compute, power budgets)
+
+**Tier C: Physical Robot (Optional Extension)**
+- **Hardware**: Unitree Go2 (~$1,600) or G1 (~$16,000+)
+- **Tools**: Full robot with motors, sensors, and control stack
+- **Benefits**:
+  - Experience whole-body control and dynamics
+  - Learn safety protocols and hardware debugging
+  - Build portfolio projects for robotics careers
+
+**This Textbook's Commitment**: Every concept will have a **Tier A (simulation) variant** that you can complete on your laptop. Tier B and C are enrichment, not requirements.
+
+---
+
+### 5. Why ROS 2 for Physical AI?
+
+**ROS 2** (Robot Operating System 2) is the de facto middleware for building modular robot systems. It provides:
+
+1. **Publish-Subscribe Communication**: Sensors publish data, processing nodes subscribe (decoupled architecture)
+2. **Tooling Ecosystem**: Simulators (Gazebo), visualization (RViz), debugging (rqt)
+3. **Hardware Abstraction**: Write code once, deploy to different robots (TurtleBot, Unitree, custom platforms)
+4. **Community Standards**: URDF for robot models, Nav2 for navigation, MoveIt for manipulation
+
+**Example**: You'll write a ROS 2 node that subscribes to camera images and publishes detected object positions. That same node can run in Gazebo simulation (Tier A) or on a real robot (Tier C) with minimal changes.
+
+**Why Not Just Python Scripts?**
+
+You *could* write robot control in standalone Python, but you'd have to:
+- Reinvent inter-process communication (topics, services)
+- Build your own simulation integration
+- Handle timing, logging, and debugging manually
+
+ROS 2 gives you these for free, letting you focus on perception and planning algorithms.
+
+---
+
+## Worked Example: Identifying the Loop in a Coffee-Fetching Robot
+
+**Scenario**: A humanoid robot is asked to "fetch a coffee cup from the kitchen counter."
+
+Let's break down the **sensor-perception-action loop** for this task:
+
+### Step 1: Sensing
+**Sensors Active**:
+- **RGB Cameras** (head-mounted): Capture color images of the kitchen
+- **Depth Camera** (e.g., RealSense): Measure distance to objects
+- **IMU** (torso): Track robot's balance and orientation
+- **Force Sensors** (gripper fingers): Detect contact with objects
+
+**Raw Data**: 640x480 pixel images at 30 Hz, depth maps, IMU acceleration/gyro readings at 200 Hz
+
+### Step 2: Perception
+**Algorithms Running**:
+- **Object Detection** (YOLO or similar): Identifies "coffee cup" in camera image, returns bounding box
+- **SLAM** (Simultaneous Localization and Mapping): Determines robot's position in the kitchen
+- **Depth Processing**: Converts 2D bounding box + depth map → 3D position of cup in space
+
+**Output**: "Coffee cup detected at position (x=1.2m, y=0.5m, z=0.9m) relative to robot"
+
+### Step 3: Planning
+**Task Planning** (high-level):
+1. Navigate to counter (avoid obstacles)
+2. Reach arm toward cup
+3. Close gripper on cup
+4. Retract arm
+5. Navigate back to human
+
+**Motion Planning** (low-level):
+- **Path Planner** (like Nav2): Compute collision-free path from current position to counter
+- **Arm Trajectory Planner** (like MoveIt): Compute smooth joint angles to reach cup position
+
+**Output**: Sequence of motor commands (wheel velocities, arm joint angles)
+
+### Step 4: Action
+**Actuators Executing**:
+- **Wheel Motors**: Drive robot toward counter at 0.3 m/s
+- **Arm Motors**: Move shoulder, elbow, wrist joints to reach cup
+- **Gripper Motor**: Close fingers around cup with gentle force (don't crush it!)
+
+**Physical Result**: Robot moves, arm extends, gripper contacts cup
+
+### Step 5: Feedback Loop
+**While Executing**:
+- **Vision**: Continuously checks if cup is still where expected (someone might move it)
+- **Force Sensors**: Detect if grip is too loose (cup slipping) or too tight (cup deforming)
+- **IMU**: Ensures robot isn't tipping over while arm is extended
+
+**If Deviation Detected**:
+- Cup moved → Re-run perception, update plan
+- Grip slipping → Increase gripper force
+- Robot unstable → Retract arm, rebalance
+
+This loop runs **continuously** until the task completes (cup delivered) or fails (cup breaks, robot falls).
+
+---
+
+## Hands-On Exercise
+
+<Exercise
+  id="ex-1-1-loop-mapping"
+  title="Map the Sensor-Action Loop"
+  difficulty="beginner"
+  chapterReference="1.1"
+  variants={[
+    {
+      tier: "A",
+      description: "Analyze a simulated robot scenario and identify each stage of the sensor-perception-action loop.",
+      setup: `
+**No installation required**. This is a conceptual exercise using diagrams and descriptions.
+
+You'll watch a video of a simulated TurtleBot3 navigating a maze in Gazebo (link provided) and identify sensor-action loop components.
+      `,
+      code: `
+# Hypothetical scenario (no code to run yet - that starts in Chapter 2!)
+
+# Imagine a TurtleBot3 with:
+# - Front-facing LiDAR (sensor)
+# - Wheel encoders (sensor)
+# - Two motorized wheels (actuators)
+# - Obstacle avoidance algorithm (perception + planning)
+
+# Watch the video (linked below) and answer the questions in the acceptance criteria.
+      `,
+      acceptanceCriteria: [
+        "Identify at least 3 sensors the TurtleBot3 uses (LiDAR, encoders, camera if present)",
+        "Describe what 'perception' extracts from sensor data (e.g., 'obstacles detected 0.5m ahead')",
+        "Explain the 'planning' decision (e.g., 'turn left to avoid obstacle')",
+        "Identify the 'action' executed (e.g., 'set left wheel to 0.1 m/s, right wheel to 0.3 m/s')",
+        "Explain how feedback works (e.g., 'after turning, LiDAR scans again to verify path is clear')"
+      ],
+      solution: `
+**Reference Video**: [TurtleBot3 Maze Navigation (Gazebo Simulation)](https://www.youtube.com/watch?v=example)
+
+**Solution Breakdown**:
+1. **Sensors**: LiDAR (laser scans 360°), wheel encoders (measure rotation), IMU (orientation)
+2. **Perception**: LiDAR scan data converted to occupancy grid (free space vs. obstacles)
+3. **Planning**: Dijkstra or A* path planner computes shortest path around obstacles
+4. **Action**: Differential drive controller sets left/right wheel velocities
+5. **Feedback**: Encoder feedback confirms wheels turned as commanded; LiDAR updates obstacle map every 0.1s
+
+**Key Insight**: The loop runs ~10 times per second, allowing the robot to react to dynamic obstacles (like a person walking into the maze).
+      `
+    }
+  ]}
+/>
+
+**Reflection Questions**:
+1. What would happen if the "perception" step took 5 seconds to process LiDAR data? (Hint: Think about how fast the world changes)
+2. Why can't the robot plan the *entire* path before starting to move? (Hint: Consider unexpected obstacles)
+3. In the coffee-fetching example, what happens if the human moves the cup while the robot is reaching for it?
+
+---
+
+## Summary
+
+**Key Takeaways**:
+
+- **Physical AI** is artificial intelligence embodied in robots that sense, perceive, plan, and act in the physical world—unlike narrow AI systems operating purely in digital domains.
+- The **sensor-perception-action loop** is the foundational pattern: sensors gather data, perception extracts meaning, planning decides actions, actuators execute, and feedback closes the loop continuously.
+- Real-world **humanoid robots** like Tesla Optimus, Figure 02, and Unitree G1 are driving demand for Physical AI skills, with applications in manufacturing, logistics, and eldercare.
+- **Simulation-first learning** (Tier A) enables rapid, safe, and accessible skill-building before deploying to expensive, fragile hardware (Tiers B and C).
+- **ROS 2** provides the middleware, tools, and community standards that make building modular, reusable robot systems practical.
+
+**What's Next?**
+
+In Chapter 2, you'll install ROS 2 and Gazebo, launch your first simulated robot, and write Python code to control it. You'll experience the sensor-action loop firsthand by subscribing to sensor data and publishing motor commands.
+
+---
+
+## Quiz
+
+<Quiz
+  id="quiz-1-1"
+  chapterReference="1.1"
+  passingScore={0.7}
+  questions={[
+    {
+      id: "q1-narrow-vs-embodied",
+      question: "What is the primary difference between narrow AI and Physical AI (embodied AI)?",
+      type: "multiple-choice",
+      options: [
+        "Narrow AI processes text, Physical AI processes sensor data",
+        "Narrow AI runs on servers, Physical AI runs on robots",
+        "Narrow AI lacks physical interaction with the world, Physical AI perceives and acts in the real world",
+        "Narrow AI is faster, Physical AI is slower"
+      ],
+      correctAnswer: 2,
+      hint: "Review the 'Core Concepts' section on 'What is Physical AI?' and the table comparing AI types.",
+      explanation: "Physical AI (embodied AI) is characterized by physical world interaction through sensors and actuators. Narrow AI operates purely in digital domains (text, images, predictions) without affecting the physical environment."
+    },
+    {
+      id: "q2-sensor-loop",
+      question: "True or False: In the sensor-perception-action loop, the robot plans its entire path before starting to move, then executes without further sensing.",
+      type: "true-false",
+      correctAnswer: "false",
+      hint: "See Figure 1.1 (Sensor-Action Loop diagram) and the 'Why This Loop Matters' explanation.",
+      explanation: "False. The sensor-perception-action loop runs continuously. The robot constantly senses the environment, updates its perception, and adjusts its plan in real-time to handle dynamic changes (obstacles moving, objects shifting, etc.)."
+    },
+    {
+      id: "q3-humanoid-reason",
+      question: "Why are humanoid robots (two legs, two arms, upright torso) useful compared to wheeled robots?",
+      type: "multiple-choice",
+      options: [
+        "Humanoids are cheaper to manufacture",
+        "Humanoids can navigate human environments (stairs, doorways) without infrastructure changes",
+        "Humanoids have better battery life",
+        "Humanoids are easier to program"
+      ],
+      correctAnswer: 1,
+      hint: "Review the 'Real-World Physical AI Platforms' section, specifically 'Why Humanoid Form?'",
+      explanation: "Humanoid robots are designed to operate in environments built for humans (stairs, narrow doorways, shelves at varying heights). Wheeled robots, while simpler, cannot climb stairs or reach high shelves easily."
+    },
+    {
+      id: "q4-tier-a-requirement",
+      question: "Which tier of the three-tier learning approach is mandatory for all learners in this textbook?",
+      type: "multiple-choice",
+      options: [
+        "Tier A: Simulation (laptop, CPU-only)",
+        "Tier B: Edge AI (Jetson + sensors)",
+        "Tier C: Physical Robot (Unitree hardware)",
+        "All three tiers are mandatory"
+      ],
+      correctAnswer: 0,
+      hint: "See Figure 1.2 (Three-Tier Learning Approach) and the description of each tier.",
+      explanation: "Tier A (Simulation) is mandatory and accessible to all learners with just a laptop. Tiers B and C are optional extensions for those with access to Jetson devices or physical robots."
+    },
+    {
+      id: "q5-ros2-benefit",
+      question: "What is one key benefit of using ROS 2 for Physical AI development?",
+      type: "multiple-choice",
+      options: [
+        "ROS 2 is the only programming language for robots",
+        "ROS 2 provides hardware abstraction, allowing code to run on different robots with minimal changes",
+        "ROS 2 eliminates the need for sensors",
+        "ROS 2 makes robots fully autonomous without human input"
+      ],
+      correctAnswer: 1,
+      hint: "Review the 'Why ROS 2 for Physical AI?' section.",
+      explanation: "ROS 2 provides hardware abstraction layers and standardized interfaces (topics, services, actions). This means you can write perception or control code once and deploy it to TurtleBot, Unitree, or custom platforms with minimal modifications."
+    }
+  ]}
+/>
+
+---
+
+## Further Reading
+
+**Official Documentation**:
+- [What is ROS 2?](https://docs.ros.org/en/humble/index.html) - Official ROS 2 Humble documentation
+- [Gazebo Simulation](https://gazebosim.org/docs) - Physics-based robot simulation
+
+**Research Papers & Articles**:
+- Russell, S. & Norvig, P. (2020). *Artificial Intelligence: A Modern Approach (4th ed.)*, Chapter 25: Robotics
+- Finn, C., Levine, S., & Abbeel, P. (2016). "Guided Cost Learning: Deep Inverse Optimal Control via Policy Optimization" - Foundational work in robot learning
+
+**Industry Perspectives**:
+- [Tesla Optimus Development Updates](https://www.tesla.com/AI) - Tesla's AI Day presentations
+- [Figure AI: Bringing Vision-Language-Action to Humanoids](https://www.figure.ai/) - Figure 02 announcements
+- [Unitree Robotics: G1 Platform Overview](https://www.unitree.com/g1/) - Specifications and use cases
+
+**Community Resources**:
+- [ROS Discourse](https://discourse.ros.org/) - Ask questions and see solutions from the ROS community
+- [r/robotics subreddit](https://www.reddit.com/r/robotics/) - Discussions on Physical AI trends and projects
+
+---
+
+**License**: This chapter is licensed under [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/).
+
+**Contributors**: Physical AI & Humanoid Robotics Textbook Project
+
+---
+
+**Ready for Chapter 2?**
+
+In the next chapter, you'll install ROS 2 Humble, set up a workspace, and launch your first simulated TurtleBot3. You'll write a simple Python node that listens to sensor data and publishes velocity commands—experiencing the sensor-action loop in code.

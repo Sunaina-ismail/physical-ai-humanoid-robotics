@@ -1,0 +1,117 @@
+# JSON Schema for Chapter Frontmatter Validation
+# Use with YAML validators or frontmatter validation scripts
+
+$schema: http://json-schema.org/draft-07/schema#
+type: object
+required:
+  - chapter_number
+  - title
+  - module
+  - prerequisites
+  - learning_outcomes
+  - estimated_time
+  - tier_support
+
+properties:
+  chapter_number:
+    type: string
+    pattern: '^\d+\.\d+$'
+    description: "Chapter number in format X.Y (e.g., '1.1', '2.3')"
+    examples:
+      - "1.1"
+      - "2.3"
+      - "4.7"
+
+  title:
+    type: string
+    minLength: 5
+    maxLength: 100
+    description: "Chapter title (concise, descriptive)"
+    examples:
+      - "Introduction to Physical AI"
+      - "ROS 2 Nodes and Topics"
+
+  module:
+    type: integer
+    minimum: 1
+    maximum: 4
+    description: "Module number (1-4)"
+
+  prerequisites:
+    type: array
+    items:
+      type: string
+    description: "List of prerequisite chapter IDs or concept names"
+    examples:
+      - ["basic-python", "command-line"]
+      - ["1.1", "1.2"]
+      - []
+
+  learning_outcomes:
+    type: array
+    minItems: 2
+    maxItems: 5
+    items:
+      type: string
+      pattern: '^(Explain|Describe|Identify|Implement|Create|Analyze|Apply|Evaluate|Design|Compare|Demonstrate|Calculate)'
+    description: "Learning outcomes using Bloom's Taxonomy verbs"
+    examples:
+      - - "Explain the difference between narrow AI and embodied AI"
+        - "Identify three current humanoid robot systems"
+        - "Describe the sensor-action loop in Physical AI"
+
+  estimated_time:
+    type: integer
+    minimum: 15
+    maximum: 180
+    description: "Estimated completion time in minutes"
+    examples:
+      - 45
+      - 60
+      - 90
+
+  tier_support:
+    type: object
+    required:
+      - A
+    properties:
+      A:
+        type: boolean
+        const: true
+        description: "Tier A (Simulation) is mandatory for all chapters"
+      B:
+        type: boolean
+        description: "Tier B (Jetson Edge AI) optional extension"
+      C:
+        type: boolean
+        description: "Tier C (Physical Robot) optional extension"
+    description: "Tier availability (A is mandatory, B/C optional)"
+
+  tags:
+    type: array
+    items:
+      type: string
+    description: "Topic tags for search and categorization"
+    examples:
+      - ["ros2", "fundamentals"]
+      - ["navigation", "slam", "advanced"]
+
+additionalProperties: false
+
+# Example valid frontmatter:
+# ---
+# chapter_number: "1.1"
+# title: "Introduction to Physical AI"
+# module: 1
+# prerequisites: ["basic-python", "command-line"]
+# learning_outcomes:
+#   - "Explain the difference between narrow AI and embodied AI"
+#   - "Identify three current humanoid robot systems"
+#   - "Describe the sensor-action loop in Physical AI systems"
+# estimated_time: 45
+# tier_support:
+#   A: true
+#   B: false
+#   C: false
+# tags: ["physical-ai", "concepts", "fundamentals"]
+# ---

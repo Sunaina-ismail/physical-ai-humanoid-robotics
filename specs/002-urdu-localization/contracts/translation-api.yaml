@@ -1,0 +1,86 @@
+# Urdu Localization Contract for Docusaurus i18n
+
+## Static Translation File Structure
+
+### UI Translation File Format (JSON)
+
+Translation files for UI elements follow the Docusaurus i18n standard format:
+
+```json
+{
+  "theme.ErrorPageContent.title": {
+    "message": "یہ صفحہ کریش ہو گیا۔",
+    "description": "The title of the fallback page when the page crashed"
+  },
+  "theme.common.editThisPage": {
+    "message": "یہ صفحہ میں ترمیم کریں",
+    "description": "The link label to edit the current page"
+  }
+}
+```
+
+### Content Translation File Format
+
+Content translation files are manually created Markdown files in the i18n directory structure that mirror the original English content with Urdu translations:
+
+```markdown
+---
+title: چیپٹر 1 - تعارف
+description: فزیکل ای ڈی اور ہیومنوائڈ روبوٹکس کا تعارف
+---
+
+# چیپٹر 1: تعارف
+
+یہ چیپٹر ROS 2 (روبوٹ آپریٹنگ سسٹم) تصورات کا تعارف دیتا ہے...
+
+## ROS 2 کیا ہے؟
+
+ROS 2 ایک اوپن سورس ڈسٹری بیوٹیڈ کمپیوٹیشن فریم ورک ہے جو روبوٹکس ایپلی کیشنز کی ترقی کے لیے استعمال ہوتا ہے۔
+```
+
+## Directory Structure Contract
+
+### Required Directory Structure
+```
+frontend/
+└── i18n/
+    └── ur/                    # Urdu locale directory
+        ├── code.json          # General UI translations
+        ├── docusaurus-plugin-content-blog/           # Blog translations (if applicable)
+        ├── docusaurus-plugin-content-docs/           # Documentation translations
+        │   └── current/       # Current version content
+        │       ├── module-1/  # Module 1 translations
+        │       ├── module-2/  # Module 2 translations
+        │       ├── module-3/  # Module 3 translations
+        │       ├── module-4/  # Module 4 translations
+        │       └── resources/ # Resource translations
+        └── docusaurus-theme-classic/                 # Theme-specific translations
+            ├── footer.json    # Footer translations
+            └── navbar.json    # Navigation translations
+```
+
+## Translation Requirements
+
+### 1. Technical Term Preservation
+- English technical terms (ROS 2, Python, Gazebo, etc.) must remain unchanged
+- When appropriate, first occurrences may include Urdu explanations in parentheses
+- Code blocks, file paths, and commands remain in original format
+
+### 2. Markdown Structure Preservation
+- All Markdown formatting (headings, lists, code blocks, etc.) must be maintained
+- Frontmatter metadata should be translated appropriately
+- Docusaurus-specific syntax (admonitions, etc.) should be preserved
+
+### 3. RTL Compliance
+- Text direction should follow right-to-left flow
+- English elements within Urdu text should maintain left-to-right direction
+- Proper bidirectional text handling for mixed content
+
+## Validation Rules
+
+1. All UI translation files must follow Docusaurus i18n JSON format
+2. Content translation files must maintain valid Markdown structure
+3. Technical terms from the predefined list must remain in English
+4. Code blocks must remain unchanged and properly formatted
+5. Translation files must be placed in the correct i18n directory structure
+6. All translated content must be valid RTL-compatible text

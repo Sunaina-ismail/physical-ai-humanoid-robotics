@@ -1,0 +1,242 @@
+---
+sidebar_position: 13
+title: "باب 13: اسیک سیم کی بنیاد (Isaac Sim Essentials)"
+description: "حقیقی فزکس، ہائی-فیڈلٹی رینڈرنگ، اور اے آئی تربیت کی صلاحیتوں کے ساتھ ایڈوانسڈ روبوٹکس سیمولیشن کے لیے NVIDIA اسیک سیم ماسٹر کریں۔"
+tags: [isaac-sim, simulation, physics, rendering, ai, robotics]
+tier: B
+prerequisites: ["ماڈیول 1: ROS 2 کی بنیاد", "ماڈیول 1: URDF روبوٹ ماڈلز", "ماڈیول 2: سینسرز کی سیمولیشن"]
+learning_outcomes: ["اسیک سیم کو انسٹال اور تشکیل دینا", "اسیک سیم میں حقیقی روبوٹ ماڈلز تیار کرنا", "فزکس-بیسڈ سیمولیشن نافذ کرنا", "ادراک اور کنٹرول کے لیے ROS 2 کے ساتھ انضمام"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# باب 13: اسیک سیم کی بنیاد
+
+## تعارف
+
+NVIDIA اسیک سیم ایک ہائی-فیڈلٹی سیمولیشن ماحول ہے جو اومنیورس پلیٹ فارم پر تیار کیا گیا ہے، روبوٹکس ترقی اور اے آئی تربیت کے لیے ڈیزائن کیا گیا ہے۔ گیزبو جیسے روایتی سیمولیٹرز کے برعکس، اسیک سیم GPU-ایکسلریٹڈ فزکس اور رینڈرنگ کا فائدہ اٹھاتا ہے تاکہ حقیقی دنیا کی شرائط سے قریب سے مماثل فوٹو ریلائزٹک ماحول تیار کیے جا سکیں۔ یہ باب اسیک سیم کی بنیادی خصوصیات کو متعارف کراتا ہے اور یہ دکھاتا ہے کہ حقیقی روبوٹکس سیمولیشن کیسے تیار کی جا سکتی ہیں۔
+
+## سیکھنے کے اہداف
+
+اس باب کے اختتام تک، آپ کو اس بات کا اہل ہو جانا چاہیے:
+
+- روبوٹکس ترقی کے لیے اسیک سیم کو انسٹال اور تشکیل دینا
+- اسیک سیم میں روبوٹ ماڈلز تیار کرنا اور درآمد کرنا
+- حقیقی سیمولیشن کے لیے فزکس خصوصیات اور مواد تشکیل دینا
+- ادراک اور کنٹرول کے لیے اسیک سیم کو ROS 2 کے ساتھ انٹرفیس کرنا
+
+## شرائطِ لازمہ
+
+اس باب کا آغاز کرنے سے پہلے، یقین کر لیں کہ آپ کے پاس ہے:
+
+- ماڈیول 1 مکمل (ROS 2 کی بنیاد، URDF)
+- ماڈیول 2 باب 12 (سینسر سیمولیشن)
+- NVIDIA GPU CUDA سپورٹ کے ساتھ
+- 3D ماڈلنگ تصورات کی بنیادی سمجھ
+
+## حقیقی دنیا کی مثلاً: ہالی ووڈ فلم پروڈکشن
+
+اسیک سیم روبوٹکس کے لیے اسپیشل ایفیکٹس اسٹوڈیو کی طرح ہے - یہ فوٹو ریلائزٹک ماحول اور فزکس تیار کرتا ہے جو حقیقی دنیا سے قابلِ فہم ہیں۔ جس طرح ہالی ووڈ قابلِ یقین فلمی مناظر تیار کرنے کے لیے ایڈوانسڈ رینڈرنگ اور فزکس انجن استعمال کرتا ہے، اسی طرح اسیک سیم انی ہی ٹیکنالوجیز کو استعمال کرتا ہے تاکہ روبوٹس کے لیے تربیتی ڈیٹا تیار کیا جا سکے جو حقیقی دنیا میں منتقل کیا جا سکے۔ "سuspension of disbelief" جو فلمی مظہرین کو فینٹیسی دنیا پر یقین کرواتا ہے، یہی اصول ہے جو اسیک سیم جنریٹڈ ڈیٹا کو حقیقی روبوٹس کے لیے مؤثر بنا دیتا ہے۔
+
+## بنیادی تصورات
+
+### 1. اومنیورس پلیٹ فارم آرکیٹیکچر
+
+اسیک سیم NVIDIA کے اومنیورس پلیٹ فارم پر چلتا ہے، جو فراہم کرتا ہے:
+
+- ریل ٹائم تعاونی 3D ڈیزائن
+- فزکلی درست سیمولیشن
+- RTX کے ساتھ ہائی-فیڈلٹی رینڈرنگ
+- USD (یونیورسل سین ڈسکرپشن) فارمیٹ سپورٹ
+
+### 2. فزکس انجن: PhysX
+
+اسیک سیم حقیقی فزکس سیمولیشن کے لیے NVIDIA کے PhysX انجن کا استعمال کرتا ہے:
+
+- ریجِڈ باڈی ڈائنیمکس
+- سافٹ باڈی سیمولیشن
+- فلوئیڈ ڈائنیمکس
+- کنٹیکٹ مواد ماڈلز
+
+```python
+# Isaac Sim میں روبوٹ کو لوڈ کرنے کی مثال
+import omni
+from pxr import Gf, UsdGeom, Sdf
+
+def create_robot_in_isaac_sim():
+    """Isaac Sim میں ایک بنیادی روبوٹ ماڈل تیار کریں"""
+
+    # ورلڈ ماڈل تیار کریں
+    stage = omni.usd.get_context().get_stage()
+
+    # روبوٹ کا کورpus تیار کریں
+    robot_path = "/World/Robot"
+    robot = stage.DefinePrim(robot_path, "Xform")
+
+    # URDF سے روبوٹ لوڈ کریں
+    from omni.isaac.core.utils.nucleus import get_assets_root_path
+    from omni.isaac.core.utils.stage import add_reference_to_stage
+
+    # روبوٹ کو اسٹیج میں شامل کریں
+    asset_path = "path/to/robot.urdf"
+    add_reference_to_stage(usd_path=robot_path, prim_path=asset_path)
+
+    print(f"روبوٹ {robot_path} پر تیار کیا گیا")
+
+    return robot
+```
+
+### 3. رینڈرنگ کی خصوصیات
+
+اسیک سیم ریل ٹائم رینڈرنگ کے لیے RTX کا استعمال کرتا ہے:
+
+- **Ray Tracing**: فوٹو ریلائزٹک لائٹنگ
+- **Global Illumination**: ماحول کی روشنی کا درست سیمولیشن
+- **Material Variants**: حقیقی مواد کی نقل و حمل
+- **Post-Processing**: کیمرہ ایفیکٹس اور فلٹر
+
+---
+
+## انسٹالیشن اور تنصیب
+
+اسیک سیم کو انسٹال کرنے کے لیے:
+
+1. **NVIDIA GPU**: یقین کریں کہ آپ کے پاس CUDA سپورٹ والی NVIDIA GPU ہے
+2. **Omniverse Launcher**: NVIDIA Omniverse Launcher ڈاؤن لوڈ کریں
+3. **Isaac Sim Extension**: Omniverse Launcher کے ذریعے Isaac Sim انسٹال کریں
+
+```bash
+# Isaac Sim کو Omniverse Launcher کے ذریعے انسٹال کریں
+# 1. Omniverse Launcher چلائیں
+# 2. Isaac Sim Extension تلاش کریں
+# 3. انسٹال بٹن دبائیں
+```
+
+---
+
+## روبوٹ ماڈلز کو امپورٹ کرنا
+
+Isaac Sim URDF اور USD فارمیٹس دونوں کو سپورٹ کرتا ہے:
+
+```python
+# URDF ماڈل کو Isaac Sim میں امپورٹ کرنا
+from omni.isaac.core.utils.nucleus import get_assets_root_path
+from omni.isaac.core.utils.stage import add_reference_to_stage
+from omni.isaac.core import World
+
+# دنیا کو تیار کریں
+world = World(stage_units_in_meters=1.0)
+
+# روبوٹ کو امپورٹ کریں
+robot_path = "/World/MyRobot"
+urdf_path = "path/to/robot.urdf"
+add_reference_to_stage(usd_path=robot_path, prim_path=urdf_path)
+
+# دنیا کو ریسیٹ کریں
+world.reset()
+```
+
+### URDF کی تبدیلی کے اہم پیرامیٹر:
+
+- `joint_damping`: جوائنٹ میں ڈیمپنگ
+- `joint_friction`: جوائنٹ میں مٹھی
+- `collision_mesh`: رکاوٹ کا ماڈل
+- `visual_mesh`: بصری ماڈل
+
+---
+
+## فزکس کی تشکیل
+
+```python
+# فزکس کی تشکیل کے لیے کوڈ
+from omni.isaac.core import World
+from omni.isaac.core.utils.stage import set_stage_units
+
+# دنیا کو تیار کریں
+world = World(stage_units_in_meters=1.0)
+
+# فزکس کی تشکیل
+physics_dt = 1.0 / 60.0  # 60 Hz
+rendering_dt = 1.0 / 60.0  # 60 Hz
+
+world.set_physics_dt(physics_dt, rendering_dt)
+world.reset()
+
+# روبوٹ کو شامل کریں
+robot = world.scene.add(
+    # روبوٹ کی تفصیل
+)
+```
+
+---
+
+## ROS 2 انٹیگریشن
+
+Isaac Sim ROS 2 کے ساتھ انضمام کے لیے ROS Bridge فراہم کرتا ہے:
+
+```python
+# Isaac Sim میں ROS 2 انٹیگریشن
+from omni.isaac.ros_bridge.scripts import example_stand_alone
+import rclpy
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import Twist
+
+class IsaacSimROSController:
+    def __init__(self):
+        self.node = rclpy.create_node('isaac_sim_controller')
+        self.cmd_vel_sub = self.node.create_subscription(
+            Twist,
+            '/cmd_vel',
+            self.cmd_vel_callback,
+            10
+        )
+        self.image_sub = self.node.create_subscription(
+            Image,
+            '/camera/image_raw',
+            self.image_callback,
+            10
+        )
+
+    def cmd_vel_callback(self, msg):
+        # Isaac Sim روبوٹ کو کمانڈ بھیجیں
+        print(f"Linear: {msg.linear.x}, Angular: {msg.angular.z}")
+
+    def image_callback(self, msg):
+        # Isaac Sim کیمرہ ڈیٹا کو سنبھالیں
+        print("کیمرہ ڈیٹا موصول ہوا")
+```
+
+---
+
+## مشق
+
+**سیمولیشن کا موازنہ**: گیزبو اور اسیک سیم کے درمیان موازنہ کریں:
+
+| خصوصیت | گیزبو | اسیک سیم |
+|---------|--------|----------|
+| GPU ایکسلریشن | CPU-بیسڈ | GPU-بیسڈ (RTX) |
+| رینڈرنگ کی معیار | میڈیم | ہائی (فوٹو ریلائزٹک) |
+| فزکس کی معیار | اچھا | بہترین |
+| تربیت کے لیے | بنیادی | اعلیٰ |
+| سیم2ریئل ٹرانسفر | درمیانہ | بہترین |
+
+<Quiz
+  title="اسیک سیم کے بنیادی تصورات"
+  questions={[
+    {
+      question: "Isaac Sim کون سا فزکس انجن استعمال کرتا ہے؟",
+      options: ["Bullet", "ODE", "PhysX", "Havok"],
+      answer: 2,
+      explanation: "Isaac Sim NVIDIA کے PhysX فزکس انجن کا استعمال کرتا ہے"
+    },
+    {
+      question: "Isaac Sim کون سے پلیٹ فارم پر چلتا ہے؟",
+      options: ["Unity", "Unreal", "Omniverse", "Blender"],
+      answer: 2,
+      explanation: "Isaac Sim NVIDIA کے Omniverse پلیٹ فارم پر چلتا ہے"
+    }
+  ]}
+/>

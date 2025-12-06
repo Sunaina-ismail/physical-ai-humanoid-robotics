@@ -1,0 +1,739 @@
+---
+sidebar_position: 16
+title: "Chapter 16: Navigation Concepts"
+description: "Explore fundamental navigation concepts including path planning, localization, mapping, and the integration of perception and control for autonomous robot navigation."
+tags: [navigation, path-planning, localization, mapping, autonomous-navigation, robotics]
+tier: A
+prerequisites: ["Module 1: ROS 2 Fundamentals", "Module 1: TF2 Transforms", "Module 1: URDF Robot Models", "Module 2: Simulating Sensors"]
+learning_outcomes: ["Understand fundamental navigation concepts and algorithms", "Implement basic path planning algorithms", "Integrate perception and navigation systems", "Configure navigation stacks for mobile robots"]
+---
+
+# Chapter 16: Navigation Concepts
+
+## Introduction
+
+Navigation is one of the most fundamental capabilities for autonomous robots, enabling them to move intelligently from one location to another while avoiding obstacles and adapting to their environment. This chapter explores the core concepts of robot navigation, including path planning, localization, mapping, and the integration of perception and control systems. Understanding these concepts is essential for developing robots that can operate autonomously in real-world environments.
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+- Explain the fundamental components of robot navigation systems
+- Implement basic path planning algorithms (A*, Dijkstra, RRT)
+- Understand the relationship between localization, mapping, and navigation
+- Integrate sensor data for obstacle detection and avoidance
+- Configure navigation parameters for different robot platforms
+
+## Prerequisites
+
+Before starting this chapter, ensure you have:
+- Completed Module 1 (ROS 2 fundamentals, TF2, URDF)
+- Module 2 (sensor simulation concepts)
+- Basic understanding of coordinate systems and transformations
+- Experience with ROS 2 message passing and parameter configuration
+
+## Real-World Analogy: The Human Navigation System
+
+Think of robot navigation like how humans navigate through unfamiliar environments. When you enter a new building, you use multiple senses and cognitive processes: you observe landmarks (mapping), remember your current location (localization), plan routes to your destination (path planning), and continuously adjust your path based on obstacles and new information (replanning). Robot navigation systems work similarly, using sensors instead of human senses and algorithms instead of human cognition to achieve autonomous movement.
+
+## Core Concepts
+
+### 1. The Navigation Stack Components
+
+Robot navigation typically involves three interconnected components:
+
+- **Localization**: Determining the robot's position in the environment
+- **Mapping**: Creating and maintaining a representation of the environment
+- **Path Planning**: Finding optimal routes from current location to goal
+
+### 2. Coordinate Frames in Navigation
+
+Navigation systems rely heavily on coordinate frames and transformations:
+- **map**: Global reference frame for the environment map
+- **odom**: Odometry-based reference frame (drifts over time)
+- **base_link**: Robot's local coordinate frame
+- **laser**: Sensor-specific coordinate frame for obstacle detection
+
+### 3. Path Planning Algorithms
+
+Different algorithms for different scenarios:
+- **Global planners**: A*, Dijkstra for optimal paths in known environments
+- **Local planners**: Dynamic Window Approach (DWA), Trajectory Rollout for obstacle avoidance
+- **Sampling-based**: RRT, PRM for complex environments
+
+## Hands-On Exercise: Implementing Basic Path Planning
+
+Let's implement a basic path planning system using the A* algorithm:
+
+```python
+#!/usr/bin/env python3
+
+"""
+Basic Path Planning Implementation
+This node demonstrates A* path planning algorithm for navigation
+"""
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped, Point
+from nav_msgs.msg import OccupancyGrid, Path
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Header
+import numpy as np
+import heapq
+from typing import List, Tuple, Optional
+
+
+class NavigationPlanner(Node):
+    def __init__(self):
+        super().__init__('navigation_planner')
+
+        # Publishers for path and visualization
+        self.path_pub = self.create_publisher(Path, 'plan', 10)
+        self.goal_sub = self.create_subscription(
+            PoseStamped, 'goal_pose', self.goal_callback, 10
+        )
+        self.map_sub = self.create_subscription(
+            OccupancyGrid, 'map', self.map_callback, 10
+        )
+        self.laser_sub = self.create_subscription(
+            LaserScan, 'scan', self.laser_callback, 10
+        )
+
+        # Navigation state
+        self.map_data = None
+        self.map_resolution = 0.0
+        self.map_width = 0
+        self.map_height = 0
+        self.map_origin = [0.0, 0.0, 0.0]  # x, y, theta
+        self.current_goal = None
+        self.current_pose = None
+
+        self.get_logger().info('Navigation Planner initialized')
+
+    def map_callback(self, msg):
+        """Callback for receiving map data"""
+        self.map_data = np.array(msg.data).reshape((msg.info.height, msg.info.width))
+        self.map_resolution = msg.info.resolution
+        self.map_width = msg.info.width
+        self.map_height = msg.info.height
+        self.map_origin = [
+            msg.info.origin.position.x,
+            msg.info.origin.position.y,
+            msg.info.origin.orientation.z
+        ]
+        self.get_logger().info(f'Map received: {self.map_width}x{self.map_height}, resolution: {self.map_resolution}')
+
+    def laser_callback(self, msg):
+        """Callback for laser scan data"""
+        # Update current pose based on laser data (simplified)
+        # In practice, this would come from localization system
+        pass
+
+    def goal_callback(self, msg):
+        """Callback for receiving navigation goal"""
+        self.current_goal = msg.pose
+        self.get_logger().info(f'Received goal: ({msg.pose.position.x}, {msg.pose.position.y})')
+
+        # Plan path if map is available
+        if self.map_data is not None:
+            self.plan_path()
+
+    def world_to_map(self, x_world, y_world):
+        """Convert world coordinates to map coordinates"""
+        x_map = int((x_world - self.map_origin[0]) / self.map_resolution)
+        y_map = int((y_world - self.map_origin[1]) / self.map_resolution)
+        return x_map, y_map
+
+    def map_to_world(self, x_map, y_map):
+        """Convert map coordinates to world coordinates"""
+        x_world = x_map * self.map_resolution + self.map_origin[0]
+        y_world = y_map * self.map_resolution + self.map_origin[1]
+        return x_world, y_world
+
+    def is_valid_cell(self, x, y):
+        """Check if cell is valid (not occupied or out of bounds)"""
+        if x < 0 or x >= self.map_width or y < 0 or y >= self.map_height:
+            return False
+        # Check if cell is occupied (value > 50 means obstacle in OccupancyGrid)
+        return self.map_data[y, x] < 50
+
+    def heuristic(self, a, b):
+        """Heuristic function for A* (Manhattan distance)"""
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def a_star(self, start, goal):
+        """A* path planning algorithm"""
+        if not self.is_valid_cell(start[0], start[1]) or not self.is_valid_cell(goal[0], goal[1]):
+            self.get_logger().warn('Start or goal is in invalid cell')
+            return None
+
+        # Priority queue: (f_score, g_score, x, y)
+        frontier = [(0, 0, start[0], start[1])]
+        came_from = {}
+        cost_so_far = {}
+        came_from[(start[0], start[1])] = None
+        cost_so_far[(start[0], start[1])] = 0
+
+        # 4-directional movement (up, down, left, right)
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+        while frontier:
+            _, current_g, x, y = heapq.heappop(frontier)
+            current = (x, y)
+
+            # Check if we reached the goal
+            if current == goal:
+                break
+
+            # Explore neighbors
+            for dx, dy in directions:
+                next_cell = (x + dx, y + dy)
+
+                if self.is_valid_cell(next_cell[0], next_cell[1]):
+                    new_cost = cost_so_far[current] + 1  # Simple cost of 1 per step
+
+                    if next_cell not in cost_so_far or new_cost < cost_so_far[next_cell]:
+                        cost_so_far[next_cell] = new_cost
+                        priority = new_cost + self.heuristic(next_cell, goal)
+                        heapq.heappush(frontier, (priority, new_cost, next_cell[0], next_cell[1]))
+                        came_from[next_cell] = current
+
+        # Reconstruct path
+        if goal not in came_from:
+            return None  # No path found
+
+        path = []
+        current = goal
+        while current != start:
+            path.append(current)
+            current = came_from[current]
+        path.append(start)
+        path.reverse()
+
+        return path
+
+    def plan_path(self):
+        """Plan path from current position to goal"""
+        if self.current_goal is None:
+            self.get_logger().warn('No goal set')
+            return
+
+        # Convert goal to map coordinates
+        goal_x, goal_y = self.world_to_map(
+            self.current_goal.position.x,
+            self.current_goal.position.y
+        )
+
+        # For this example, assume current position is at (0,0) in map coordinates
+        start_x, start_y = self.world_to_map(0.0, 0.0)
+
+        # Plan path using A*
+        path = self.a_star((start_x, start_y), (goal_x, goal_y))
+
+        if path is None:
+            self.get_logger().warn('No path found to goal')
+            return
+
+        # Convert path back to world coordinates and create Path message
+        path_msg = Path()
+        path_msg.header = Header()
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+        path_msg.header.frame_id = 'map'
+
+        for x_map, y_map in path:
+            x_world, y_world = self.map_to_world(x_map, y_map)
+            pose = PoseStamped()
+            pose.header = Header()
+            pose.header.stamp = self.get_clock().now().to_msg()
+            pose.header.frame_id = 'map'
+            pose.pose.position.x = x_world
+            pose.pose.position.y = y_world
+            pose.pose.position.z = 0.0
+            pose.pose.orientation.w = 1.0  # No rotation
+
+            path_msg.poses.append(pose)
+
+        # Publish the path
+        self.path_pub.publish(path_msg)
+        self.get_logger().info(f'Published path with {len(path_msg.poses)} waypoints')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    navigation_planner = NavigationPlanner()
+
+    try:
+        rclpy.spin(navigation_planner)
+    except KeyboardInterrupt:
+        navigation_planner.get_logger().info('Shutting down navigation planner')
+    finally:
+        navigation_planner.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Navigation System Integration
+
+Now let's create a navigation manager that integrates perception and planning:
+
+```python
+#!/usr/bin/env python3
+
+"""
+Navigation System Manager
+Integrates localization, mapping, and path planning components
+"""
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped, Twist
+from nav_msgs.msg import Odometry, Path
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
+import numpy as np
+from tf2_ros import TransformListener, Buffer
+import tf2_geometry_msgs
+from typing import Optional
+
+
+class NavigationManager(Node):
+    def __init__(self):
+        super().__init__('navigation_manager')
+
+        # Create TF2 buffer and listener
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # Publishers and subscribers
+        self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.goal_sub = self.create_subscription(
+            PoseStamped, 'move_base_simple/goal', self.goal_callback, 10
+        )
+        self.odom_sub = self.create_subscription(
+            Odometry, 'odom', self.odom_callback, 10
+        )
+        self.laser_sub = self.create_subscription(
+            LaserScan, 'scan', self.laser_callback, 10
+        )
+        self.path_sub = self.create_subscription(
+            Path, 'plan', self.path_callback, 10
+        )
+
+        # Navigation state
+        self.current_goal = None
+        self.current_path = None
+        self.current_pose = None
+        self.navigation_active = False
+        self.path_index = 0
+
+        # Navigation parameters
+        self.linear_speed = 0.2  # m/s
+        self.angular_speed = 0.5  # rad/s
+        self.arrival_threshold = 0.2  # meters
+        self.path_lookahead = 0.5  # meters ahead on path
+
+        # Timer for navigation control
+        self.nav_timer = self.create_timer(0.1, self.navigation_control)
+
+        self.get_logger().info('Navigation Manager initialized')
+
+    def goal_callback(self, msg):
+        """Handle navigation goal"""
+        self.current_goal = msg
+        self.get_logger().info(f'New goal received: ({msg.pose.position.x}, {msg.pose.position.y})')
+
+        # Start navigation
+        self.navigation_active = True
+        self.path_index = 0
+
+    def odom_callback(self, msg):
+        """Handle odometry data"""
+        self.current_pose = msg.pose.pose
+
+    def laser_callback(self, msg):
+        """Handle laser scan for obstacle detection"""
+        if not self.navigation_active:
+            return
+
+        # Check for obstacles in front of robot
+        min_distance = min(msg.ranges)
+
+        if min_distance < 0.5:  # Obstacle within 0.5m
+            self.get_logger().warn('Obstacle detected, stopping navigation')
+            self.stop_robot()
+            # In a real system, this would trigger replanning
+
+    def path_callback(self, msg):
+        """Handle received path"""
+        if len(msg.poses) > 0:
+            self.current_path = msg.poses
+            self.path_index = 0
+            self.get_logger().info(f'Received path with {len(msg.poses)} waypoints')
+
+    def get_current_position(self):
+        """Get current position in map frame"""
+        if self.current_pose is None:
+            return None
+
+        # In a real system, this would use TF2 to get the transform
+        # For this example, we'll use the pose directly
+        return self.current_pose.position
+
+    def navigation_control(self):
+        """Main navigation control loop"""
+        if not self.navigation_active or self.current_path is None:
+            return
+
+        if self.path_index >= len(self.current_path):
+            self.get_logger().info('Reached end of path')
+            self.navigation_active = False
+            self.stop_robot()
+            return
+
+        # Get current position and next waypoint
+        current_pos = self.get_current_position()
+        if current_pos is None:
+            return
+
+        target_pose = self.current_path[self.path_index].pose
+        target_pos = target_pose.position
+
+        # Calculate distance to target
+        dist_to_target = np.sqrt(
+            (current_pos.x - target_pos.x)**2 +
+            (current_pos.y - target_pos.y)**2
+        )
+
+        # Check if we've reached the current waypoint
+        if dist_to_target < self.arrival_threshold:
+            self.path_index += 1
+            if self.path_index >= len(self.current_path):
+                self.get_logger().info('Reached goal')
+                self.navigation_active = False
+                self.stop_robot()
+                return
+
+        # Calculate direction to target
+        dx = target_pos.x - current_pos.x
+        dy = target_pos.y - current_pos.y
+        target_angle = np.arctan2(dy, dx)
+
+        # Get current robot orientation
+        current_yaw = self.quaternion_to_yaw(self.current_pose.orientation)
+
+        # Calculate angle difference
+        angle_diff = target_angle - current_yaw
+        # Normalize angle to [-pi, pi]
+        while angle_diff > np.pi:
+            angle_diff -= 2 * np.pi
+        while angle_diff < -np.pi:
+            angle_diff += 2 * np.pi
+
+        # Create velocity command
+        cmd_vel = Twist()
+
+        # If angle is large, turn first
+        if abs(angle_diff) > 0.2:  # 0.2 rad = ~11 degrees
+            cmd_vel.angular.z = np.clip(angle_diff * 2.0, -self.angular_speed, self.angular_speed)
+        else:
+            # Move forward while adjusting orientation
+            cmd_vel.linear.x = self.linear_speed
+            cmd_vel.angular.z = np.clip(angle_diff * 3.0, -self.angular_speed, self.angular_speed)
+
+        # Publish command
+        self.cmd_vel_pub.publish(cmd_vel)
+
+    def quaternion_to_yaw(self, quat):
+        """Convert quaternion to yaw angle"""
+        siny_cosp = 2 * (quat.w * quat.z + quat.x * quat.y)
+        cosy_cosp = 1 - 2 * (quat.y * quat.y + quat.z * quat.z)
+        return np.arctan2(siny_cosp, cosy_cosp)
+
+    def stop_robot(self):
+        """Stop the robot"""
+        cmd_vel = Twist()
+        self.cmd_vel_pub.publish(cmd_vel)
+        self.get_logger().info('Robot stopped')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    navigation_manager = NavigationManager()
+
+    try:
+        rclpy.spin(navigation_manager)
+    except KeyboardInterrupt:
+        navigation_manager.get_logger().info('Shutting down navigation manager')
+    finally:
+        navigation_manager.stop_robot()
+        navigation_manager.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Launch File for Navigation System
+
+```xml
+<launch>
+  <!-- Navigation System Launch File -->
+
+  <!-- Map server to provide static map -->
+  <node pkg="nav2_map_server"
+        exec="map_server"
+        name="map_server"
+        output="screen">
+    <param name="yaml_filename" value="path/to/your/map.yaml"/>
+    <param name="topic_name" value="map"/>
+    <param name="frame_id" value="map"/>
+  </node>
+
+  <!-- AMCL for localization -->
+  <node pkg="nav2_amcl"
+        exec="amcl"
+        name="amcl"
+        output="screen">
+    <param name="initial_pose.x" value="0.0"/>
+    <param name="initial_pose.y" value="0.0"/>
+    <param name="initial_pose.z" value="0.0"/>
+    <param name="initial_pose.yaw" value="0.0"/>
+  </node>
+
+  <!-- Basic path planner node -->
+  <node pkg="your_navigation_package"
+        exec="navigation_planner"
+        name="navigation_planner"
+        output="screen"/>
+
+  <!-- Navigation manager -->
+  <node pkg="your_navigation_package"
+        exec="navigation_manager"
+        name="navigation_manager"
+        output="screen"/>
+
+  <!-- Transform publisher for robot tf -->
+  <node pkg="robot_state_publisher"
+        exec="robot_state_publisher"
+        name="robot_state_publisher">
+    <param name="robot_description" value="$(var robot_description)"/>
+  </node>
+
+  <!-- Laser scan processor -->
+  <node pkg="your_perception_package"
+        exec="laser_processor"
+        name="laser_processor"
+        output="screen"/>
+
+</launch>
+```
+
+## Navigation Parameters Configuration
+
+```yaml
+# Navigation parameters configuration
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_link"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0
+    laser_min_range: -1.0
+    laser_model_type: "likelihood_field"
+    max_beams: 60
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.1
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+
+controller_server:
+  ros__parameters:
+    use_sim_time: True
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugin: "goal_checker"
+    controller_plugins: ["FollowPath"]
+
+    # Progress checker parameters
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+
+    # Goal checker parameters
+    goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.25
+      stateful: True
+
+    # FollowPath controller parameters
+    FollowPath:
+      plugin: "nav2_rotation_shim::RotationShimController"
+      distance_threshold: 0.25
+      rotate_to_heading_angular_vel: 1.0
+      max_angular_accel: 3.2
+      simulate_ahead_time: 1.0
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_link
+      use_sim_time: True
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      robot_radius: 0.22
+      plugins: ["voxel_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.2
+        z_voxels: 10
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: True
+      robot_radius: 0.22
+      resolution: 0.05
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+```
+
+## Key Navigation Concepts
+
+### 1. Localization vs Mapping vs Navigation
+
+- **Localization**: Determining where the robot is in a known map
+- **Mapping**: Creating a map of an unknown environment
+- **Navigation**: Planning and executing paths to reach goals
+
+### 2. Coordinate Frame Management
+
+Navigation systems require careful management of coordinate frames:
+- Transform trees must be properly maintained
+- Time synchronization is critical
+- TF2 provides essential tools for frame transformations
+
+### 3. Safety and Obstacle Avoidance
+
+- Local planners must react to dynamic obstacles
+- Collision checking and emergency stopping
+- Path replanning when obstacles are detected
+
+## Quiz: Navigation Concepts
+
+1. What are the three main components of a robot navigation system?
+2. What is the difference between global and local path planning?
+3. Why is coordinate frame management critical in navigation systems?
+4. What is the purpose of the A* algorithm in navigation?
+
+## Hands-On Challenge
+
+Create a complete navigation system that:
+1. Integrates sensor data for obstacle detection
+2. Implements both global and local path planning
+3. Handles dynamic replanning when obstacles are detected
+4. Includes safety mechanisms for emergency stopping
+
+## Summary
+
+This chapter introduced fundamental navigation concepts:
+- The interconnection between localization, mapping, and navigation
+- Path planning algorithms and their implementation
+- Coordinate frame management in navigation systems
+- Integration of perception and control for autonomous navigation
+
+## Further Reading
+
+- ROS 2 Navigation2 (Nav2) Documentation
+- Path Planning Algorithms in Robotics
+- SLAM (Simultaneous Localization and Mapping)
+- Mobile Robot Navigation Systems
+
+## Next Chapter Preview
+
+Chapter 17 will explore the Nav2 stack in detail, covering its architecture, configuration, and practical implementation for real robot navigation systems.

@@ -1,0 +1,255 @@
+---
+sidebar_position: 14
+title: "باب 14: GPU فزکس اور رینڈرنگ (GPU Physics & Rendering)"
+description: "ہائی-فیڈلٹی روبوٹکس سیمولیشن اور اے آئی تربیت کے لیے GPU-ایکسلریٹڈ فزکس سیمولیشن اور فوٹو ریلائزٹک رینڈرنگ تکنیکس کا جائزہ لیں۔"
+tags: [gpu, physics, rendering, simulation, isaac-sim, omniverse, robotics]
+tier: B
+prerequisites: ["ماڈیول 1: ROS 2 کی بنیاد", "ماڈیول 2: اسیک سیم کی بنیاد", "کمپیوٹر گریفکس کی بنیادی سمجھ"]
+learning_outcomes: ["GPU-ایکسلریٹڈ فزکس سیمولیشن کو سمجھنا", "فوٹو ریلائزٹک رینڈرنگ تکنیکس نافذ کرنا", "سیمولیشن کارکردگی کو بہتر بنانا", "حقیقی سینسر سیمولیشن تیار کرنا"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# باب 14: GPU فزکس اور رینڈرنگ
+
+## تعارف
+
+جدید روبوٹکس سیمولیشن کو اس کمپیوٹیشنل طاقت کی ضرورت ہوتی ہے جو صرف GPU ایکسلریشن کے ذریعے میسر ہو سکتی ہے۔ NVIDIA کا اسیک سیم اور اومنیورس پلیٹ فارم جدید GPU ٹیکنالوجیز کا فائدہ اٹھاتا ہے تاکہ فزکلی درست سیمولیشن اور فوٹو ریلائزٹک رینڈرنگ فراہم کی جا سکے۔ یہ باب یہ جائزہ لیتا ہے کہ GPU-ایکسلریٹڈ فزکس اور رینڈرنگ کیسے ہائی-فیڈلٹی روبوٹکس سیمولیشن کو فعال کرتے ہیں جو حقیقی دنیا کی شرائط سے قریب سے مماثل ہو۔
+
+## سیکھنے کے اہداف
+
+اس باب کے اختتام تک، آپ کو اس بات کا اہل ہو جانا چاہیے:
+
+- GPU-ایکسلریٹڈ فزکس سیمولیشن کے اصول سمجھنا
+- اسیک سیم میں ایڈوانسڈ رینڈرنگ تکنیکس تشکیل دینا
+- پیچیدہ مناظر کے لیے سیمولیشن کارکردگی کو بہتر بنانا
+- GPU رینڈرنگ کا استعمال کرتے ہوئے حقیقی سینسر سیمولیشن نافذ کرنا
+
+## شرائطِ لازمہ
+
+اس باب کا آغاز کرنے سے پہلے، یقین کر لیں کہ آپ کے پاس ہے:
+
+- ماڈیول 1 مکمل (ROS 2 کی بنیاد)
+- ماڈیول 2 باب 13 (اسیک سیم کی بنیاد)
+- کمپیوٹر گریفکس کے تصورات کی بنیادی سمجھ
+- NVIDIA GPU CUDA سپورٹ کے ساتھ
+
+## حقیقی دنیا کی مثلاً: فلم اسٹوڈیو بمقابلہ ویب کیم
+
+روبوٹکس سیمولیشن میں GPU-ایکسلریٹڈ رینڈرنگ فلم اسٹوڈیو اور ویب کیم کے فرق کی طرح ہے۔ ویب کیم محدود معیار کے ساتھ بنیادی ویڈیو کیپچر فراہم کرتا ہے، جبکہ فلم اسٹوڈیو پروفنسل کیمرے، لائٹنگ، اور پوسٹ پروڈکشن کا استعمال کرتا ہے تاکہ فوٹو ریلائزٹک مناظر تیار کیے جا سکیں۔ اسی طرح، روایتی CPU-بیسڈ سیمولیشن بنیادی فزکس فراہم کرتا ہے، جبکہ GPU-ایکسلریٹڈ سیمولیشن فوٹو ریلائزٹک رینڈرنگ اور فزکلی درست سیمولیشن فراہم کرتا ہے جو حقیقت سے قابلِ فہم تربیتی ڈیٹا تیار کر سکتا ہے۔
+
+## بنیادی تصورات
+
+### 1. GPU-ایکسلریٹڈ فزکس (PhysX)
+
+NVIDIA کا PhysX انجن GPU پیراللزم کا فائدہ اٹھاتا ہے:
+
+- ریجِڈ باڈی ڈائنیمکس سیمولیشن
+- سافٹ باڈی اور کپڑے کی سیمولیشن
+- فلوئیڈ سیمولیشن
+- کنٹیکٹ ریزولوشن اور کالیژن ڈیٹیکشن
+
+### 2. ریل ٹائم رے ٹریسنگ
+
+جدید GPU ریل ٹائم رے ٹریسنگ کو سپورٹ کرتے ہیں:
+
+- درست لائٹنگ اور سایہ
+- گلوبل ایلومینیشن
+- ریفلیکشن اور ریفریکشن
+- میٹلک اور روغ سطح کا سیمولیشن
+
+```python
+# GPU فزکس کی تشکیل کے لیے کوڈ
+import omni
+from omni.isaac.core import World
+from omni.physx import get_physx_interface
+
+def configure_gpu_physics():
+    """GPU فزکس کی تشکیل کریں"""
+
+    # دنیا کو تیار کریں
+    world = World(stage_units_in_meters=1.0)
+
+    # PhysX انٹرفیس حاصل کریں
+    physx = get_physx_interface()
+
+    # GPU فزکس کو فعال کریں
+    physx.set_gpu_physics_enabled(True)
+    physx.set_gpu_collision_pipeline_enabled(True)
+
+    # فزکس کی تشکیل
+    physx.set_gravity([0.0, 0.0, -9.81])
+    physx.set_simulation_dt(1.0/60.0)  # 60 Hz
+
+    print("GPU فزکس کامیابی سے تشکیل دیا گیا")
+
+    return world
+```
+
+### 3. رینڈرنگ کی معیار کے اہم عناصر
+
+| عنصر | CPU رینڈرنگ | GPU رینڈرنگ |
+|------|--------------|--------------|
+| ریل ٹائم فریم ریٹ | 30 FPS | 60+ FPS |
+| لائٹنگ کی معیار | بنیادی | فوٹو ریلائزٹک |
+| رے ٹریسنگ | نہیں | ہاں (RTX) |
+| میٹریل کی نقل و حمل | محدود | ہائی فیڈلٹی |
+| سینسر ڈیٹا کی معیار | میڈیم | ہائی |
+
+---
+
+## GPU فزکس کی تشکیل
+
+```python
+# GPU فزکس کی مکمل تشکیل
+from omni.isaac.core import World
+from omni.isaac.core.utils.stage import set_stage_units
+
+def setup_gpu_physics_simulation():
+    """GPU فزکس سیمولیشن سیٹ اپ کریں"""
+
+    # دنیا کو تیار کریں
+    world = World(stage_units_in_meters=1.0)
+
+    # فزکس کی تشکیل
+    physics_settings = {
+        "solver_position_iterations": 4,
+        "solver_velocity_iterations": 1,
+        "enable_ccd": True,  # Continuous collision detection
+        "use_gpu": True,
+        "gpu_max_rigid_contact_count": 1000000,
+        "gpu_max_rigid_patch_count": 100000
+    }
+
+    # فزکس کی تشکیل کو لاگو کریں
+    from omni.physx import get_physx_interface
+    physx = get_physx_interface()
+
+    # GPU فزکس کو فعال کریں
+    physx.set_gpu_physics_enabled(True)
+    physx.set_gpu_collision_pipeline_enabled(True)
+
+    print("GPU فزکس سیمولیشن تیار کیا گیا")
+
+    return world
+```
+
+### GPU فزکس کے اہم پیرامیٹر:
+
+- `gpu_max_rigid_contact_count`: زیادہ سے زیادہ کنٹیکٹ کا شمار
+- `gpu_max_rigid_patch_count`: زیادہ سے زیادہ پیچ کا شمار
+- `enable_ccd`: مسلسل کالیژن ڈیٹیکشن
+- `use_gpu`: GPU استعمال کو فعال کریں
+
+---
+
+## ریل ٹائم رینڈرنگ
+
+```python
+# ریل ٹائم رینڈرنگ کو تشکیل دینے کے لیے کوڈ
+from omni.isaac.synthetic_utils import SyntheticDataHelper
+from omni.kit.viewport.utility import get_active_viewport
+
+def setup_realtime_rendering():
+    """ریل ٹائم رینڈرنگ سیٹ اپ کریں"""
+
+    # ویو پورٹ حاصل کریں
+    viewport = get_active_viewport()
+
+    # رینڈرنگ کی تشکیل
+    rendering_settings = {
+        "render_mode": "RayTracedLightMap",  # RTX رینڈرنگ
+        "lighting_quality": "High",
+        "enable_denoising": True,
+        "max_surface_bounces": 8
+    }
+
+    # رینڈرنگ کو تازہ کریں
+    viewport.set_active_camera("/World/Robot/Camera")
+
+    print("ریل ٹائم رینڈرنگ تیار کیا گیا")
+```
+
+---
+
+## سینسر ڈیٹا کی معیار
+
+GPU رینڈرنگ کے ذریعے تیار کردہ سینسر ڈیٹا حقیقی ڈیٹا سے قریب سے مماثل ہوتا ہے:
+
+```python
+# GPU رینڈرڈ سینسر ڈیٹا کے لیے کوڈ
+import numpy as np
+from omni.isaac.core.utils.types import ArticulationAction
+
+def generate_realistic_sensor_data():
+    """GPU رینڈرڈ حقیقی سینسر ڈیٹا تیار کریں"""
+
+    # کیمرہ ڈیٹا کے لیے نوائز شامل کریں
+    def add_camera_noise(image_data):
+        # حقیقی کیمرہ نوائز کی نقل و حمل
+        noise = np.random.normal(0, 0.01, image_data.shape)
+        noisy_image = np.clip(image_data + noise, 0, 1)
+        return noisy_image
+
+    # لیڈار ڈیٹا کے لیے نوائز شامل کریں
+    def add_lidar_noise(scan_data):
+        # حقیقی لیڈار نوائز کی نقل و حمل
+        noise = np.random.normal(0, 0.02, scan_data.shape)
+        noisy_scan = scan_data + noise
+        return noisy_scan
+
+    print("GPU رینڈرڈ سینسر ڈیٹا تیار کیا گیا")
+```
+
+---
+
+## کارکردگی کو بہتر بنانا
+
+```python
+# GPU سیمولیشن کارکردگی کو بہتر بنانے کے لیے کوڈ
+def optimize_gpu_simulation():
+    """GPU سیمولیشن کارکردگی کو بہتر بنائیں"""
+
+    optimization_settings = {
+        "lod_bias": 0.5,  # Level of detail bias
+        "texture_mipmap_bias": 0.5,
+        "max_gpu_particles": 100000,
+        "enable_gpu_slicing": True
+    }
+
+    print("GPU سیمولیشن کارکردگی کو بہتر بنایا گیا")
+```
+
+---
+
+## مشق
+
+**GPU vs CPU سیمولیشن**: GPU اور CPU سیمولیشن کے درمیان موازنہ کریں:
+
+| خصوصیت | CPU سیمولیشن | GPU سیمولیشن |
+|---------|---------------|---------------|
+| سیمولیشن کی رفتار | 1x ریل ٹائم | 5x-10x ریل ٹائم |
+| رینڈرنگ کی معیار | میڈیم | ہائی (فوٹو ریلائزٹک) |
+| فزکس کی معیار | اچھا | بہترین |
+| تربیت کے لیے ڈیٹا | میڈیم فیڈلٹی | ہائی فیڈلٹی |
+
+<Quiz
+  title="GPU فزکس اور رینڈرنگ"
+  questions={[
+    {
+      question: "PhysX انجن کون استعمال کرتا ہے؟",
+      options: ["CPU صرف", "GPU صرف", "CPU اور GPU دونوں", "کوئی نہیں"],
+      answer: 2,
+      explanation: "PhysX انجن CPU اور GPU دونوں کا استعمال کر سکتا ہے"
+    },
+    {
+      question: "ریل ٹائم رے ٹریسنگ کے لیے کون سی ٹیکنالوجی ضروری ہے؟",
+      options: ["CUDA", "RTX", "OpenCL", "Vulkan"],
+      answer: 1,
+      explanation: "ریل ٹائم رے ٹریسنگ RTX ٹیکنالوجی کے ساتھ GPU پر کام کرتی ہے"
+    }
+  ]}
+/>

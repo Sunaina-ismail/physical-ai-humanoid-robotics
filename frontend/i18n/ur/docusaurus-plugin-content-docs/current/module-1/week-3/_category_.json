@@ -1,0 +1,8 @@
+{
+  "label": "ہفتہ 3: ROS 2 سروسز، ایکشنز اور لائف سائیکل (Week 3: ROS 2 Services, Actions & Lifecycle)",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn about ROS 2 services and actions for request-response and long-running operations."
+  }
+}

@@ -1,0 +1,304 @@
+---
+sidebar_position: 15
+title: "باب 15: ڈومین رینڈمائزیشن (Domain Randomization)"
+description: "روبوٹکس ایپلی کیشنز میں سیمولیشن سے حقیقت تک منتقلی کے لیے مضبوط اے آئی ماڈلز تیار کرنے کے لیے ڈومین رینڈمائزیشن تکنیکس ماسٹر کریں۔"
+tags: [domain-randomization, sim2real, ai, machine-learning, robotics, transfer-learning]
+tier: C
+prerequisites: ["ماڈیول 1: ROS 2 کی بنیاد", "ماڈیول 2: اسیک سیم کی بنیاد", "مشین لرننگ کی بنیادی سمجھ"]
+learning_outcomes: ["ڈومین رینڈمائزیشن تکنیکس نافذ کرنا", "سیم-ٹو-ریئل ٹرانسفر کے لیے مضبوط اے آئی ماڈلز تیار کرنا", "فزکس، رینڈرنگ، اور سینسر پیرامیٹرز پر رینڈمائزیشن لاگو کرنا", "ڈومینز کے درمیان ماڈل کارکردگی کی توثیق کرنا"]
+---
+
+import MermaidDiagram from '@site/src/components/MermaidDiagram';
+import Exercise from '@site/src/components/Exercise';
+import Quiz from '@site/src/components/Quiz';
+import PrerequisiteCheck from '@site/src/components/PrerequisiteCheck';
+
+# باب 15: ڈومین رینڈمائزیشن
+
+## تعارف
+
+ڈومین رینڈمائزیشن روبوٹکس اور اے آئی میں ایک طاقتور تکنیک ہے جو "ریئلٹی گیپ" کا حل فراہم کرتی ہے - سیمولیشن میں تربیت یافتہ ماڈلز کو حقیقی دنیا کی ایپلی کیشنز میں منتقل کرنے کا چیلنج۔ تربیت کے دوران ماحولیاتی حالات، فزکس پیرامیٹرز، اور سینسر کی خصوصیات کو منظم طریقے سے تبدیل کر کے، ڈومین رینڈمائزیشن ایسے اے آئی ماڈلز تیار کرتی ہے جو سیمولیشن اور حقیقت کے درمیان فرق کے لیے مضبوط ہوتے ہیں۔ یہ باب یہ جائزہ لیتا ہے کہ روبوٹکس سیمولیشن ماحول میں ڈومین رینڈمائزیشن کو کیسے نافذ کیا جا سکتا ہے۔
+
+## سیکھنے کے اہداف
+
+اس باب کے اختتام تک، آپ کو اس بات کا اہل ہو جانا چاہیے:
+
+- ڈومین رینڈمائزیشن کے اصول سمجھنا
+- فزکس پیرامیٹرز کے لیے رینڈمائزیشن تکنیکس نافذ کرنا
+- رینڈرنگ ڈومین رینڈمائزیشن لاگو کرنا
+- مضبوط ادراک کے لیے سینسر ڈومین رینڈمائزیشن تیار کرنا
+- سیم-ٹو-ریئل ٹرانسفر کارکردگی کا جائزہ لینا
+
+## شرائطِ لازمہ
+
+اس باب کا آغاز کرنے سے پہلے، یقین کر لیں کہ آپ کے پاس ہے:
+
+- ماڈیول 1 مکمل (ROS 2 کی بنیاد)
+- ماڈیول 2 ابواب 12-14 (سیمولیشن، اسیک سیم، GPU رینڈرنگ)
+- مشین لرننگ کے تصورات کی بنیادی سمجھ
+- روبوٹکس سیمولیشن ماحول کا تجربہ
+
+## حقیقی دنیا کی مثلاً: متعدد ماحول میں ایک بچے کو سکھانا
+
+ڈومین رینڈمائزیشن اس کی طرح ہے جیسے ایک بچے کو صرف آپ کے لانگ روم میں بلکہ مختلف لائٹنگ کی شرائط، مختلف زاویوں سے، مختلف ماحول (پارک، کار، دوست کا گھر)، مختلف بلی کی نسلوں، اور مختلف پوزیشنز میں ایک بلی کو پہچاننا سکھانا۔ اگر آپ بچے کو صرف آپ کے لانگ روم میں بلیاں دکھاتے ہیں، تو وہ باہر ایک بلی کو پہچان نہیں سکے گا۔ اسی طرح، صرف ایک سیمولیشن ماحول میں روبوٹس کو تربیت دینا ایسے ماڈلز تیار کرتا ہے جو حقیقی دنیا میں منتقل ہونے پر ناکام ہو جاتے ہیں۔ ڈومین رینڈمائزیشن اے آئی کو حقیقت کے متعدد "ورژن" دکھاتا ہے تاکہ مضبوط سمجھ تیار کی جا سکے۔
+
+## بنیادی تصورات
+
+### 1. ریئلٹی گیپ مسئلہ
+
+ریئلٹی گیپ سیمولیشن اور حقیقت کے درمیان فرق کو اشارہ کرتا ہے جو سیمولیشن میں تربیت یافتہ ماڈلز کو حقیقی دنیا میں استعمال میں ناکامی کا سبب بنتا ہے:
+
+- بصری فرق: لائٹنگ، ٹیکسچر، رنگ
+- فزکس کا فرق: مٹھی، ڈائنیمکس، کنٹیکٹ ماڈلز
+- سینسر کا فرق: نوائز، ریزولوشن، کیلیبریشن
+- ماحولیاتی فرق: خاکے، اشیاء، شرائط
+
+### 2. ڈومین رینڈمائزیشن کی حکمت عملی
+
+ڈومین رینڈمائزیشن ریئلٹی گیپ کا حل فراہم کرتی ہے:
+
+- **سیمولیشن کی وسعت**: ماڈل کو متعدد مختلف ماحول میں تربیت دینا
+- **پیرامیٹر رینڈمائزیشن**: فزکس، رینڈرنگ، اور سینسر پیرامیٹرز کو بے ترتیب کرنا
+- **ڈومین ڈسکوریج**: تربیت کے دوران ماڈل کو مختلف ڈومینز کو دیکھنا
+- **ٹرانسفر ٹیسٹنگ**: حقیقی دنیا میں کارکردگی کا جائزہ لینا
+
+```python
+# ڈومین رینڈمائزیشن کی مثال
+import numpy as np
+from omni.isaac.core import World
+import random
+
+class DomainRandomization:
+    def __init__(self, world: World):
+        self.world = world
+        self.domain_ranges = {
+            "lighting": {"min": 0.5, "max": 2.0},  # لائٹنگ کی شدت
+            "friction": {"min": 0.1, "max": 0.9},  # مٹھی
+            "color": {"min": [0.1, 0.1, 0.1], "max": [1.0, 1.0, 1.0]},  # رنگ
+            "texture": {"types": ["wood", "metal", "plastic", "fabric"]}  # ٹیکسچر
+        }
+
+    def randomize_lighting(self):
+        """لائٹنگ کو بے ترتیب کریں"""
+        intensity = random.uniform(
+            self.domain_ranges["lighting"]["min"],
+            self.domain_ranges["lighting"]["max"]
+        )
+        # لائٹنگ کو اپ ڈیٹ کریں
+        print(f"لائٹنگ کی شدت {intensity} پر سیٹ کی گئی")
+
+    def randomize_physics(self):
+        """فزکس کو بے ترتیب کریں"""
+        friction = random.uniform(
+            self.domain_ranges["friction"]["min"],
+            self.domain_ranges["friction"]["max"]
+        )
+        # فزکس کو اپ ڈیٹ کریں
+        print(f"مٹھی {friction} پر سیٹ کی گئی")
+
+    def randomize_environment(self):
+        """ماحول کو بے ترتیب کریں"""
+        # ٹیکسچر کو بے ترتیب کریں
+        texture_type = random.choice(self.domain_ranges["texture"]["types"])
+        # رنگ کو بے ترتیب کریں
+        color = [
+            random.uniform(self.domain_ranges["color"]["min"][i],
+                          self.domain_ranges["color"]["max"][i])
+            for i in range(3)
+        ]
+        print(f"ٹیکسچر: {texture_type}, رنگ: {color}")
+
+    def apply_randomization(self):
+        """تمام رینڈمائزیشن لاگو کریں"""
+        self.randomize_lighting()
+        self.randomize_physics()
+        self.randomize_environment()
+        print("ڈومین رینڈمائزیشن لاگو کیا گیا")
+```
+
+### 3. ڈومین رینڈمائزیشن کی اقسام
+
+| ڈومین ٹائپ | تفصیل | مثال |
+|-------------|--------|--------|
+| **رینڈرنگ** | بصری خصوصیات | لائٹنگ، رنگ، ٹیکسچر، کیمرہ نوائز |
+| **فزکس** | فزکل خصوصیات | مٹھی، بیس، ڈریفٹ |
+| **سینسر** | سینسر کی خصوصیات | نوائز، ریزولوشن، کیلیبریشن |
+| **ماحول** | ماحولیاتی خصوصیات | اشیاء، لے آؤٹ، حالات |
+
+---
+
+## فزکس ڈومین رینڈمائزیشن
+
+```python
+# فزکس ڈومین رینڈمائزیشن کے لیے کوڈ
+class PhysicsDomainRandomization:
+    def __init__(self):
+        self.physics_params = {
+            "gravity": {"min": -10.0, "max": -9.5},
+            "friction": {"min": 0.05, "max": 0.8},
+            "restitution": {"min": 0.0, "max": 0.5},
+            "damping": {"min": 0.0, "max": 0.1}
+        }
+
+    def randomize_friction(self, articulation):
+        """articulation کی مٹھی کو بے ترتیب کریں"""
+        for link in articulation.links:
+            friction = np.random.uniform(
+                self.physics_params["friction"]["min"],
+                self.physics_params["friction"]["max"]
+            )
+            # مٹھی کو اپ ڈیٹ کریں
+            print(f"لِنک {link.name} کی مٹھی {friction} پر سیٹ کی گئی")
+
+    def randomize_dynamics(self, articulation):
+        """articulation کی ڈائنیمکس کو بے ترتیب کریں"""
+        for joint in articulation.joints:
+            damping = np.random.uniform(
+                self.physics_params["damping"]["min"],
+                self.physics_params["damping"]["max"]
+            )
+            # ڈیمپنگ کو اپ ڈیٹ کریں
+            print(f"جوائنٹ {joint.name} کا ڈیمپنگ {damping} پر سیٹ کیا گیا")
+```
+
+### فزکس رینڈمائزیشن کے اہم پیرامیٹر:
+
+- `friction`: سطح کی مٹھی
+- `restitution`: چوٹ کا جواب
+- `damping`: حرکت کی تخفیف
+- `mass`: اشیاء کا وزن
+
+---
+
+## رینڈرنگ ڈومین رینڈمائزیشن
+
+```python
+# رینڈرنگ ڈومین رینڈمائزیشن کے لیے کوڈ
+class RenderingDomainRandomization:
+    def __init__(self):
+        self.rendering_params = {
+            "light_intensity": {"min": 0.1, "max": 5.0},
+            "light_color": {
+                "min": [0.5, 0.5, 0.5],
+                "max": [1.0, 1.0, 1.0]
+            },
+            "camera_noise": {"min": 0.0, "max": 0.05},
+            "background": ["sky", "indoor", "outdoor", "random"]
+        }
+
+    def randomize_lighting(self):
+        """لائٹنگ کو بے ترتیب کریں"""
+        intensity = np.random.uniform(
+            self.rendering_params["light_intensity"]["min"],
+            self.rendering_params["light_intensity"]["max"]
+        )
+        color = [
+            np.random.uniform(
+                self.rendering_params["light_color"]["min"][i],
+                self.rendering_params["light_color"]["max"][i]
+            ) for i in range(3)
+        ]
+        print(f"لائٹنگ: شدت={intensity}, رنگ={color}")
+
+    def randomize_camera(self):
+        """کیمرہ کو بے ترتیب کریں"""
+        noise_level = np.random.uniform(
+            self.rendering_params["camera_noise"]["min"],
+            self.rendering_params["camera_noise"]["max"]
+        )
+        print(f"کیمرہ نوائز لیول: {noise_level}")
+```
+
+---
+
+## سینسر ڈومین رینڈمائزیشن
+
+```python
+# سینسر ڈومین رینڈمائزیشن کے لیے کوڈ
+class SensorDomainRandomization:
+    def __init__(self):
+        self.sensor_params = {
+            "camera": {
+                "noise_std": {"min": 0.01, "max": 0.05},
+                "resolution": [(640, 480), (800, 600), (1280, 720)],
+                "distortion": {"min": 0.0, "max": 0.1}
+            },
+            "lidar": {
+                "noise_std": {"min": 0.001, "max": 0.02},
+                "range": {"min": 5.0, "max": 30.0}
+            }
+        }
+
+    def randomize_camera(self, camera):
+        """کیمرہ کو بے ترتیب کریں"""
+        noise_std = np.random.uniform(
+            self.sensor_params["camera"]["noise_std"]["min"],
+            self.sensor_params["camera"]["noise_std"]["max"]
+        )
+        resolution = random.choice(self.sensor_params["camera"]["resolution"])
+        print(f"کیمرہ: نوائز STD={noise_std}, ریزولوشن={resolution}")
+
+    def randomize_lidar(self, lidar):
+        """لیڈار کو بے ترتیب کریں"""
+        noise_std = np.random.uniform(
+            self.sensor_params["lidar"]["noise_std"]["min"],
+            self.sensor_params["lidar"]["noise_std"]["max"]
+        )
+        range_val = np.random.uniform(
+            self.sensor_params["lidar"]["range"]["min"],
+            self.sensor_params["lidar"]["range"]["max"]
+        )
+        print(f"لیڈار: نوائز STD={noise_std}, رینج={range_val}")
+```
+
+---
+
+## ٹرانسفر کی کارکردگی کا جائزہ
+
+```python
+# ٹرانسفر کارکردگی کے جائزے کے لیے کوڈ
+def evaluate_sim_to_real_transfer(sim_model, real_robot):
+    """سیم-ٹو-ریئل ٹرانسفر کارکردگی کا جائزہ لیں"""
+
+    # سیمولیشن میں کارکردگی
+    sim_performance = test_model_performance(sim_model, sim_env)
+
+    # حقیقی دنیا میں کارکردگی
+    real_performance = test_model_performance(sim_model, real_env)
+
+    # ٹرانسفر کی کامیابی کا پیمانہ
+    transfer_success = real_performance / sim_performance
+
+    print(f"سیم-ٹو-ریئل ٹرانسفر کامیابی: {transfer_success:.2f}")
+
+    return transfer_success
+```
+
+---
+
+## مشق
+
+**ڈومین رینڈمائزیشن کی تیاری**: ایک نیویگیشن ٹاسک کے لیے ڈومین رینڈمائزیشن پیرامیٹرز کا تعین کریں:
+
+1. **لائٹنگ**: مختلف وقت کی شرائط (صبح، دوپہر، شام)
+2. **فرش کے مواد**: چکنی، کھردری، کارپٹ والی سطح
+3. **رکاوٹیں**: مختلف سائز، شکل، رنگ
+4. **کیمرہ نوائز**: مختلف نوائز لیولز
+
+<Quiz
+  title="ڈومین رینڈمائزیشن"
+  questions={[
+    {
+      question: "ڈومین رینڈمائزیشن کا بنیادی مقصد کیا ہے؟",
+      options: ["سیمولیشن کو تیز کرنا", "سیم-ٹو-ریئل ٹرانسفر کو بہتر بنانا", "ڈیٹا کی مقدار کم کرنا", "کوڈ کو سادہ بنانا"],
+      answer: 1,
+      explanation: "ڈومین رینڈمائزیشن کا مقصد سیم-ٹو-ریئل ٹرانسفر کو بہتر بنانا ہے"
+    },
+    {
+      question: "ریئلٹی گیپ کی اقسام میں کون سا شامل نہیں ہے؟",
+      options: ["بصری فرق", "فزکس کا فرق", "سینسر کا فرق", "کوڈ کا فرق"],
+      answer: 3,
+      explanation: "کوڈ کا فرق ریئلٹی گیپ کی ایک قسم نہیں ہے"
+    }
+  ]}
+/>

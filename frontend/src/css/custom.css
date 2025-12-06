@@ -1,0 +1,193 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #2e8555;
+  --ifm-color-primary-dark: #29784c;
+  --ifm-color-primary-darker: #277148;
+  --ifm-color-primary-darkest: #205d3b;
+  --ifm-color-primary-light: #33925d;
+  --ifm-color-primary-lighter: #359962;
+  --ifm-color-primary-lightest: #3cad6e;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+
+  /* Tier color scheme */
+  --tier-a-color: #28a745; /* Green for Tier A (mandatory, simulation-only) */
+  --tier-b-color: #007bff; /* Blue for Tier B (optional, Jetson extension) */
+  --tier-c-color: #6f42c1; /* Purple for Tier C (optional, physical robot) */
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #25c2a0;
+  --ifm-color-primary-dark: #21af90;
+  --ifm-color-primary-darker: #1fa588;
+  --ifm-color-primary-darkest: #1a8870;
+  --ifm-color-primary-light: #29d5b0;
+  --ifm-color-primary-lighter: #32d8b4;
+  --ifm-color-primary-lightest: #4fddbf;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+
+  /* Dark mode tier colors */
+  --tier-a-color-dark: #4caf50;
+  --tier-b-color-dark: #2196f3;
+  --tier-c-color-dark: #9c27b0;
+}
+
+/* Tier A (Simulation - Mandatory) */
+.tier-a {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.tier-a-badge {
+  background-color: var(--tier-a-color);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: bold;
+  display: inline-block;
+  margin-right: 0.25rem;
+}
+
+/* Tier B (Edge AI - Optional) */
+.tier-b {
+  background-color: #d1ecf1;
+  border: 1px solid #bee5eb;
+  color: #0c5460;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.tier-b-badge {
+  background-color: var(--tier-b-color);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: bold;
+  display: inline-block;
+  margin-right: 0.25rem;
+}
+
+/* Tier C (Physical Robot - Optional) */
+.tier-c {
+  background-color: #e2d9eb;
+  border: 1px solid #d4c7e1;
+  color: #4d2a5d;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.tier-c-badge {
+  background-color: var(--tier-c-color);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: bold;
+  display: inline-block;
+  margin-right: 0.25rem;
+}
+
+/* Tier badge container for consistent styling */
+.tier-badges-container {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+  align-items: center;
+}
+
+/* Danger/admonition blocks for safety */
+.admonition.admonition-danger {
+  border-color: #dc3545;
+}
+
+.admonition.admonition-danger .admonition-heading {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* Mermaid diagram container styling */
+.mermaid {
+  margin: 1rem 0;
+  overflow: auto;
+}
+
+/* Quiz component styling */
+.quiz-container {
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.quiz-question {
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.quiz-option {
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.quiz-option:hover {
+  background-color: #f8f9fa;
+}
+
+.quiz-option.selected {
+  background-color: #e7f1ff;
+  border-color: #86b7fe;
+}
+
+/* Exercise component styling */
+.exercise-container {
+  border-left: 4px solid var(--tier-b-color);
+  background-color: #f8f9fa;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.exercise-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--tier-b-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .tier-badges-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .exercise-container,
+  .tier-a,
+  .tier-b,
+  .tier-c {
+    padding: 0.75rem;
+  }
+}
