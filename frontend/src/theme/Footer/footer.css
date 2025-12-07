@@ -1,0 +1,74 @@
+/* Footer gradient wrapper */
+.footer-gradient-wrapper {
+  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  background-size: 200% 200%;
+  animation: footerShimmer 10s ease infinite;
+  border-top: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes footerShimmer {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Override default footer background */
+.footer-gradient-wrapper footer {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Footer text styling */
+.footer-gradient-wrapper .footer__title {
+  color: #d4af37 !important;
+  font-weight: 600;
+  text-shadow: 0 0 5px rgba(212, 175, 55, 0.3);
+}
+
+.footer-gradient-wrapper .footer__item {
+  color: #e0e0e0 !important;
+}
+
+.footer-gradient-wrapper .footer__link-item {
+  color: #e0e0e0 !important;
+  transition: all 0.3s ease;
+}
+
+.footer-gradient-wrapper .footer__link-item:hover {
+  color: #d4af37 !important;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.5);
+  text-decoration: none;
+}
+
+/* Copyright text */
+.footer-gradient-wrapper .footer__copyright {
+  color: #e0e0e0 !important;
+  opacity: 0.8;
+}
+
+/* Footer bottom */
+.footer-gradient-wrapper .footer__bottom {
+  border-top: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+/* Social links (if any) */
+.footer-gradient-wrapper .footer__link-item svg {
+  fill: #e0e0e0;
+  transition: fill 0.3s ease;
+}
+
+.footer-gradient-wrapper .footer__link-item:hover svg {
+  fill: #d4af37;
+  filter: drop-shadow(0 0 5px rgba(212, 175, 55, 0.6));
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .footer-gradient-wrapper {
+    background-size: 300% 300%;
+  }
+}

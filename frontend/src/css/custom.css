@@ -20,6 +20,52 @@
   --tier-a-color: #28a745; /* Green for Tier A (mandatory, simulation-only) */
   --tier-b-color: #007bff; /* Blue for Tier B (optional, Jetson extension) */
   --tier-c-color: #6f42c1; /* Purple for Tier C (optional, physical robot) */
+
+  /* Futuristic gradient theme - same colors for light and dark */
+  --primary-color: #0f0c29;
+  --secondary-color: #302b63;
+  --tertiary-color: #24243e;
+  --background-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  --text-color: #ffffff;
+  --text-color-secondary: #e0e0e0;
+  --text-color-min-contrast: #ffffff;
+  --accent-color: #d4af37;
+  --accent-color-secondary: #c89b3c;
+  --button-bg-start: #b8860b;
+  --button-bg-end: #d4af37;
+  --button-text-color: #1a1445;
+  --author-color: #e0e0e0;
+  --circuit-color: rgba(100, 200, 255, 0.3);
+  --glow-color: rgba(138, 43, 226, 0.5);
+
+  /* Light Mode Colors */
+  --primary-color-light: #f5f5f5;
+  --secondary-color-light: #e0e0e0;
+  --background-color-light: linear-gradient(to bottom right, var(--primary-color-light), var(--secondary-color-light));
+  --text-color-light: #212121; /* Dark text for better contrast on light backgrounds */
+  --text-color-secondary-light: #424242; /* Darker gray for secondary text */
+  --text-color-min-contrast-light: #212121; /* Ensures 4.5:1 contrast ratio on light backgrounds */
+  --accent-color-light: #8b4513;
+  --accent-color-secondary-light: #a0522d;
+  --button-bg-start-light: #8b4513;
+  --button-bg-end-light: #a0522d;
+  --button-text-color-light: #ffffff;
+  --author-color-light: #333333;
+
+  /* Layout */
+  --hero-padding: 4rem;
+  --max-width-desktop: 1200px;
+  --column-left-width: 55%;
+  --column-right-width: 45%;
+  --mobile-breakpoint: 996px;
+
+  /* Typography */
+  --font-family-serif: 'Playfair Display', 'Cinzel', 'Trajan', serif;
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Animations */
+  --animation-speed: 0.3s;
+  --transition-easing: ease-in-out;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
@@ -37,6 +83,282 @@
   --tier-a-color-dark: #4caf50;
   --tier-b-color-dark: #2196f3;
   --tier-c-color-dark: #9c27b0;
+
+  /* Futuristic gradient theme - same colors for both modes */
+  --primary-color: #0f0c29;
+  --secondary-color: #302b63;
+  --tertiary-color: #24243e;
+  --background-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  --text-color: #ffffff;
+  --text-color-secondary: #e0e0e0;
+  --accent-color: #d4af37;
+  --accent-color-secondary: #c89b3c;
+  --button-bg-start: #b8860b;
+  --button-bg-end: #d4af37;
+  --button-text-color: #1a1445;
+  --author-color: #e0e0e0;
+  --circuit-color: rgba(100, 200, 255, 0.3);
+  --glow-color: rgba(138, 43, 226, 0.5);
+}
+
+/* Light theme override - same colors as dark mode for consistency */
+[data-theme='light'] {
+  --primary-color: #0f0c29;
+  --secondary-color: #302b63;
+  --tertiary-color: #24243e;
+  --background-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  --text-color: #ffffff;
+  --text-color-secondary: #e0e0e0;
+  --accent-color: #d4af37;
+  --accent-color-secondary: #c89b3c;
+  --button-bg-start: #b8860b;
+  --button-bg-end: #d4af37;
+  --button-text-color: #1a1445;
+  --author-color: #e0e0e0;
+  --circuit-color: rgba(100, 200, 255, 0.3);
+  --glow-color: rgba(138, 43, 226, 0.5);
+}
+
+/* Animated gradient background for hero section */
+.hero-bg-layered {
+  position: relative;
+  background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #1a1a3e, #2c1e4a);
+  background-size: 400% 400%;
+  animation: gradientBG 20s ease infinite;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+/* Animation for gradient background */
+@keyframes gradientBG {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Circuitry overlay effect */
+.hero-bg-layered::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 20% 40%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 30% 10%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 40% 60%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 50% 30%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 60% 80%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 70% 50%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 80% 70%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px),
+    radial-gradient(circle at 90% 40%, rgba(64, 224, 208, 0.1) 0.5px, transparent 1px);
+  background-size: 100px 100px;
+  opacity: 0.7;
+  animation: circuitFlow 20s linear infinite;
+}
+
+/* Multi-layer code text overlay for futuristic effect */
+.hero-bg-layered::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    linear-gradient(90deg, rgba(100, 200, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(100, 200, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+  animation: gridMove 30s linear infinite;
+}
+
+@keyframes gridMove {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+@keyframes circuitFlow {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(-100px, -100px);
+  }
+}
+
+/* Header with animated gradient background */
+.header-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-size: 400% 400%;
+  animation: headerGradient 8s ease infinite;
+}
+
+@keyframes headerGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Footer with animated gradient background */
+.footer-gradient {
+  background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+  background-size: 400% 400%;
+  animation: footerGradient 10s ease infinite;
+}
+
+@keyframes footerGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Additional modern gradient classes */
+.gradient-purple-blue {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-pink-purple {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.gradient-teal-blue {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.gradient-orange-red {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+}
+
+.gradient-indigo-blue {
+  background: linear-gradient(135deg, #4776E6 0%, #8E54E9 100%);
+}
+
+/* Smooth transition for all gradient animations */
+* {
+  background-attachment: scroll !important;
+  background-clip: border-box !important;
+  background-origin: padding-box !important;
+  transition: background-position 0.5s ease;
+}
+
+/* Responsive container */
+.hero-section-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--hero-padding);
+  max-width: var(--max-width-desktop);
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Left column for text content */
+.hero-content {
+  width: var(--column-left-width);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--text-color);
+}
+
+/* Right column for robot image */
+.hero-visual {
+  width: var(--column-right-width);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Author styling */
+.hero-author {
+  color: var(--author-color);
+  font-family: var(--font-family-serif);
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  margin-top: 1.5rem;
+  align-self: flex-start;
+}
+
+/* CTA Button styling */
+.hero-cta-button {
+  display: inline-block;
+  padding: 0.8rem 2rem;
+  border-radius: 50px; /* Pill shape */
+  background: linear-gradient(to right, var(--button-bg-start), var(--button-bg-end));
+  color: var(--button-text-color);
+  text-decoration: none;
+  font-family: var(--font-family-serif);
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-align: center;
+  border: none;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+  transition: all var(--animation-speed) var(--transition-easing);
+}
+
+.hero-cta-button:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+  filter: brightness(1.1);
+}
+
+.hero-cta-button:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+/* Responsive styles */
+@media (max-width: var(--mobile-breakpoint)) {
+  .hero-section-container {
+    flex-direction: column;
+    text-align: center;
+    padding: 2rem;
+  }
+
+  .hero-content {
+    width: 100%;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+
+  .hero-visual {
+    width: 100%;
+  }
+
+  .hero-author {
+    align-self: center;
+  }
 }
 
 /* Tier A (Simulation - Mandatory) */
@@ -189,5 +511,66 @@
   .tier-b,
   .tier-c {
     padding: 0.75rem;
+  }
+}
+
+/* Futuristic animated title styles */
+.futuristic-title {
+  font-family: 'Playfair Display', 'Cinzel', serif;
+  font-size: clamp(2rem, 6vw, 4.5rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow:
+    0 0 10px rgba(212, 175, 55, 0.6),
+    0 0 20px rgba(212, 175, 55, 0.4),
+    0 0 30px rgba(138, 43, 226, 0.3),
+    2px 2px 4px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  margin: 0;
+  position: relative;
+  z-index: 10;
+  animation: titleFloat 6s ease-in-out infinite;
+}
+
+@keyframes titleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Subtitle "AND" connector styling */
+.title-connector {
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-weight: 400;
+  color: #d4af37;
+  opacity: 1;
+  margin: 0.5rem 0;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.5);
+  position: relative;
+  z-index: 10;
+}
+
+/* Responsive title adjustments */
+@media (max-width: 996px) {
+  .futuristic-title {
+    font-size: clamp(1.5rem, 5vw, 3rem);
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+
+  .title-connector {
+    font-size: clamp(0.8rem, 2vw, 1.2rem);
+  }
+}
+
+@media (max-width: 600px) {
+  .futuristic-title {
+    font-size: clamp(1.2rem, 4.5vw, 2rem);
   }
 }
