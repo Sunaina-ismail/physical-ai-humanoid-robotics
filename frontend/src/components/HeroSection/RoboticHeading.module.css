@@ -1,0 +1,38 @@
+.roboticHeadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  width: 100%;
+}
+
+.roboticMainTitle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+/* Dark mode styles */
+.roboticHeadingContainer.dark {
+  /* Styles handled by the logo component */
+}
+
+/* Light mode styles */
+.roboticHeadingContainer.light {
+  /* Styles handled by the logo component */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .roboticHeadingContainer {
+    align-items: center;
+  }
+
+  .roboticMainTitle {
+    align-items: center;
+  }
+}

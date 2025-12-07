@@ -1,0 +1,121 @@
+.logoContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.roboticLogo {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  filter: url('#glow');
+}
+
+/* Metallic and glowing effects */
+.metallicStroke {
+  stroke: linear-gradient(135deg, #d4af37, #a67c52, #5d4037);
+  filter: drop-shadow(0 0 2px rgba(212, 175, 55, 0.5));
+}
+
+.metallicFill {
+  fill: linear-gradient(135deg, #1a1445, #09061b);
+}
+
+.circuitPattern {
+  opacity: 0.7;
+  animation: circuitFlow 4s linear infinite;
+}
+
+.glowingElement {
+  filter: drop-shadow(0 0 3px rgba(212, 175, 55, 0.8));
+  animation: pulse 2s ease-in-out infinite alternate;
+}
+
+.glowingElement circle {
+  animation: pulse 2s ease-in-out infinite alternate;
+}
+
+.pupil {
+  animation: blink 5s infinite;
+}
+
+.statusLight {
+  animation: statusPulse 1.5s ease-in-out infinite alternate;
+}
+
+/* Animations */
+@keyframes circuitFlow {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(1px, 1px);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    filter: drop-shadow(0 0 2px rgba(212, 175, 55, 0.5));
+    opacity: 0.7;
+  }
+  100% {
+    filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.9));
+    opacity: 1;
+  }
+}
+
+@keyframes blink {
+  0%, 45%, 55%, 100% {
+    transform: scaleY(1);
+  }
+  48%, 52% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes statusPulse {
+  0% {
+    opacity: 0.5;
+    r: 2;
+  }
+  100% {
+    opacity: 1;
+    r: 2.5;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .roboticLogo {
+    max-width: 300px;
+  }
+
+  .logoText {
+    font-size: 6px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .roboticLogo {
+    max-width: 250px;
+  }
+
+  .logoText {
+    font-size: 5px !important;
+  }
+}
+
+/* Dark mode specific styles */
+[data-theme='dark'] .roboticLogo {
+  /* Already designed for dark mode */
+}
+
+/* Light mode specific styles */
+[data-theme='light'] .roboticLogo .metallicStroke {
+  stroke: linear-gradient(135deg, #b8860b, #8b4513, #5d2906);
+}
+
+[data-theme='light'] .roboticLogo .logoText {
+  fill: #333333;
+}

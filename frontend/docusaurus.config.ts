@@ -88,7 +88,9 @@ const config: Config = {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     colorMode: {
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      disableSwitch: false,
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: 'Physical AI & Humanoid Robotics',
@@ -101,63 +103,52 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
-          label: 'Textbook',
+          label: 'TextBook',
         },
         {
           type: 'localeDropdown',
           position: 'right',
+          dropdownItemsAfter: [],
         },
         {
-          href: 'https://github.com/your-org/physical-ai-humanoid-robotics',
+          href: 'https://github.com/ySunaina-ismail/physical-ai-humanoid-robotics',
           label: 'GitHub',
           position: 'right',
         },
       ],
+      hideOnScroll: false,
     },
     footer: {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Learn',
           items: [
             {
-              label: 'Textbook',
-              to: '/docs/',
+              label: 'Module 1',
+              to: '/docs/module-1/',
+            },
+            {
+              label: 'Module 2',
+              to: '/docs/module-2/',
+            },
+            {
+              label: 'Module 3',
+              to: '/docs/module-3/',
             },
           ],
         },
         {
-          title: 'Community',
+          title: 'Resources',
           items: [
-            {
-              label: 'Stack Overflow',
-              href: 'https://stackoverflow.com/questions/tagged/docusaurus',
-            },
-            {
-              label: 'Discord',
-              href: 'https://discordapp.com/invite/docusaurus',
-            },
-            {
-              label: 'X',
-              href: 'https://x.com/docusaurus',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'Blog',
-              to: '/blog',
-            },
             {
               label: 'GitHub',
-              href: 'https://github.com/facebook/docusaurus',
+              href: 'https://github.com/Sunaina-ismail/physical-ai-humanoid-robotics',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Physical AI & Humanoid Robotics. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,
