@@ -111,7 +111,7 @@ const config: Config = {
           dropdownItemsAfter: [],
         },
         {
-          href: 'https://github.com/ySunaina-ismail/physical-ai-humanoid-robotics',
+          href: 'https://github.com/Sunaina-ismail/physical-ai-humanoid-robotics',
           label: 'GitHub',
           position: 'right',
         },
