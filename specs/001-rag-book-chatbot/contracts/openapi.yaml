@@ -1,0 +1,486 @@
+openapi: 3.1.0
+
+info:
+  title: Integrated RAG Chatbot API
+  version: 1.0.0
+  description: |
+    RESTful API for the Integrated RAG Chatbot that answers questions strictly based on book content.
+
+    **Key Features**:
+    - RAG-powered question answering with chapter citations
+    - Selected text explanation
+    - Query classification (greeting, chit-chat, book question, out-of-scope)
+    - Zero hallucination tolerance with strict content grounding
+
+    **Technology Stack**:
+    - FastAPI (backend framework)
+    - Qdrant Cloud (vector database)
+    - Gemini text-embedding-004 (embeddings)
+    - OpenAI-Agents SDK with Gemini (response generation)
+  contact:
+    name: API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server (placeholder)
+
+tags:
+  - name: chat
+    description: Chatbot interaction endpoints
+  - name: health
+    description: Health check and status endpoints
+
+paths:
+  /chat:
+    post:
+      summary: Send a query to the chatbot
+      description: |
+        Main chatbot endpoint that handles all query types:
+        - **Greetings**: "Hello", "Hi there" → Friendly onboarding response
+        - **Chit-chat**: "How are you?" → Polite conversational response
+        - **Book questions**: "What is reinforcement learning?" → RAG-powered answer with citations
+        - **Selected text explanation**: Query with selected_text field → Explanation with chapter reference
+        - **Out-of-scope**: "What's the weather?" → Polite refusal
+
+        **Response Time**: 90% of queries under 3 seconds
+        **Accuracy**: 95% with correct chapter citations
+      operationId: sendChatQuery
+      tags:
+        - chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              book_question:
+                summary: Book question
+                value:
+                  query: "What is reinforcement learning?"
+
+              selected_text:
+                summary: Explain selected text
+                value:
+                  query: "Explain this concept"
+                  selected_text: "Reinforcement learning is a type of machine learning where agents learn through interaction with an environment to maximize cumulative reward."
+
+              greeting:
+                summary: Greeting
+                value:
+                  query: "Hello!"
+
+              out_of_scope:
+                summary: Out-of-scope question
+                value:
+                  query: "What's the weather today?"
+
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+              examples:
+                book_question_success:
+                  summary: Book question with citations
+                  value:
+                    answer: "Reinforcement learning is a machine learning paradigm where agents learn through interaction with an environment to maximize cumulative reward. The agent takes actions, receives feedback in the form of rewards or penalties, and adjusts its behavior to improve future outcomes."
+                    citations:
+                      - chapter_number: 3
+                        chapter_title: "Machine Learning Fundamentals"
+                        section_title: "Introduction to RL"
+                        snippet: "Reinforcement learning is a type of machine learning where agents learn through interaction..."
+                        similarity_score: 0.89
+                      - chapter_number: 3
+                        chapter_title: "Machine Learning Fundamentals"
+                        section_title: "Key Concepts"
+                        snippet: "The agent-environment interaction loop is central to RL..."
+                        similarity_score: 0.82
+                    query_type: "book_question"
+                    confidence: 0.89
+                    content_found: true
+
+                selected_text_success:
+                  summary: Selected text explanation
+                  value:
+                    answer: "This passage describes the core mechanism of reinforcement learning. The agent (learner) interacts with an environment, taking actions that lead to different states. Each action produces a reward signal that guides learning. Over time, the agent learns a policy that maximizes the total expected reward."
+                    citations:
+                      - chapter_number: 3
+                        chapter_title: "Machine Learning Fundamentals"
+                        section_title: "Introduction to RL"
+                        snippet: "Reinforcement learning is a type of machine learning where agents learn through interaction..."
+                        similarity_score: 1.0
+                    query_type: "selected_text_explanation"
+                    confidence: 1.0
+                    content_found: true
+
+                greeting_success:
+                  summary: Greeting response
+                  value:
+                    answer: "Hello! I'm your book assistant. I can answer questions about the book's content, explain concepts, and help you understand specific passages. What would you like to know?"
+                    citations: []
+                    query_type: "greeting"
+                    confidence: null
+                    content_found: true
+
+                out_of_scope_success:
+                  summary: Out-of-scope refusal
+                  value:
+                    answer: "I can only answer questions about this book's content. Please ask me about topics covered in the chapters."
+                    citations: []
+                    query_type: "out_of_scope"
+                    confidence: null
+                    content_found: true
+
+                content_not_found:
+                  summary: No relevant content found
+                  value:
+                    answer: "I couldn't find relevant information in the book to answer your question. Please try rephrasing or ask about a different topic covered in the chapters."
+                    citations: []
+                    query_type: "book_question"
+                    confidence: null
+                    content_found: false
+
+        '400':
+          description: Validation error (empty query, oversized payload, malformed JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                empty_query:
+                  summary: Empty query
+                  value:
+                    error: "validation_error"
+                    message: "Query cannot be empty or whitespace-only"
+                    details:
+                      field: "query"
+                      constraint: "min_length"
+                    timestamp: "2025-12-06T10:30:00Z"
+                    request_id: "req_123abc"
+
+                query_too_long:
+                  summary: Query exceeds maximum length
+                  value:
+                    error: "validation_error"
+                    message: "Query exceeds maximum length of 2000 characters"
+                    details:
+                      field: "query"
+                      constraint: "max_length"
+                      actual_length: 2150
+                    timestamp: "2025-12-06T10:31:00Z"
+                    request_id: "req_456def"
+
+        '500':
+          description: Internal server error (database failure, embedding error, agent error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                database_error:
+                  summary: Qdrant connection failure
+                  value:
+                    error: "database_error"
+                    message: "Failed to connect to vector database after retry"
+                    details:
+                      retry_count: 1
+                    timestamp: "2025-12-06T10:32:00Z"
+                    request_id: "req_789ghi"
+
+                configuration_error:
+                  summary: Missing API configuration
+                  value:
+                    error: "configuration_error"
+                    message: "GEMINI_API_KEY environment variable not set"
+                    details: null
+                    timestamp: "2025-12-06T10:33:00Z"
+                    request_id: "req_012jkl"
+
+        '503':
+          description: Service temporarily unavailable (maintenance, rate limiting)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                service_unavailable:
+                  summary: Service unavailable
+                  value:
+                    error: "internal_error"
+                    message: "Service temporarily unavailable, please try again later"
+                    details: null
+                    timestamp: "2025-12-06T10:34:00Z"
+                    request_id: "req_345mno"
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns the health status of the API and its dependencies.
+
+        **Checks**:
+        - API server status
+        - Qdrant connection
+        - Gemini API configuration
+      operationId: getHealthStatus
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  summary: All systems operational
+                  value:
+                    status: "healthy"
+                    checks:
+                      api: "ok"
+                      qdrant: "ok"
+                      gemini_config: "ok"
+                    timestamp: "2025-12-06T10:35:00Z"
+
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                unhealthy:
+                  summary: Database connection failure
+                  value:
+                    status: "unhealthy"
+                    checks:
+                      api: "ok"
+                      qdrant: "error"
+                      gemini_config: "ok"
+                    timestamp: "2025-12-06T10:36:00Z"
+
+components:
+  schemas:
+    ChatRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: "The user's question or input text"
+          example: "What is reinforcement learning?"
+
+        selected_text:
+          type: string
+          maxLength: 5000
+          nullable: true
+          description: "Optional text selected from the book for explanation"
+          example: "Reinforcement learning is a type of machine learning where agents learn through interaction with an environment."
+
+      example:
+        query: "What is reinforcement learning?"
+
+    ChatResponse:
+      type: object
+      required:
+        - answer
+        - citations
+        - query_type
+        - content_found
+      properties:
+        answer:
+          type: string
+          minLength: 1
+          description: "The chatbot's response text"
+          example: "Reinforcement learning is a machine learning paradigm where agents learn through interaction with an environment to maximize cumulative reward."
+
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChapterCitation'
+          description: "List of chapter citations (empty for greetings/chit-chat/out-of-scope)"
+          example:
+            - chapter_number: 3
+              chapter_title: "Machine Learning Fundamentals"
+              section_title: "Introduction to RL"
+              snippet: "Reinforcement learning is a type of machine learning where agents learn through interaction..."
+              similarity_score: 0.89
+
+        query_type:
+          type: string
+          enum:
+            - greeting
+            - chit_chat
+            - book_question
+            - selected_text_explanation
+            - out_of_scope
+          description: "Classified type of the original query"
+          example: "book_question"
+
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          nullable: true
+          description: "Response confidence (null for non-RAG responses, >= 0.7 for RAG responses)"
+          example: 0.89
+
+        content_found:
+          type: boolean
+          description: "Whether relevant content was found (always true for non-RAG queries)"
+          example: true
+
+    ChapterCitation:
+      type: object
+      required:
+        - chapter_number
+        - chapter_title
+        - section_title
+        - snippet
+        - similarity_score
+      properties:
+        chapter_number:
+          type: integer
+          minimum: 1
+          description: "Chapter number being cited"
+          example: 3
+
+        chapter_title:
+          type: string
+          description: "Title of the cited chapter"
+          example: "Machine Learning Fundamentals"
+
+        section_title:
+          type: string
+          description: "Section within the chapter (empty string if whole chapter)"
+          example: "Introduction to RL"
+
+        snippet:
+          type: string
+          minLength: 10
+          maxLength: 500
+          description: "Brief excerpt from the cited content"
+          example: "Reinforcement learning is a type of machine learning where agents learn through interaction..."
+
+        similarity_score:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: "Cosine similarity score (expected range: 0.7-1.0)"
+          example: 0.89
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+          enum:
+            - validation_error
+            - configuration_error
+            - database_error
+            - embedding_error
+            - agent_error
+            - not_found
+            - internal_error
+          description: "Category of error"
+          example: "validation_error"
+
+        message:
+          type: string
+          minLength: 1
+          description: "Human-readable error description"
+          example: "Query cannot be empty or whitespace-only"
+
+        details:
+          type: object
+          nullable: true
+          description: "Additional error context (no secrets)"
+          additionalProperties: true
+          example:
+            field: "query"
+            constraint: "min_length"
+
+        timestamp:
+          type: string
+          format: date-time
+          description: "When the error occurred (ISO 8601 UTC)"
+          example: "2025-12-06T10:30:00Z"
+
+        request_id:
+          type: string
+          nullable: true
+          description: "Request ID for tracing (if available)"
+          example: "req_123abc"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - checks
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - unhealthy
+          description: "Overall health status"
+          example: "healthy"
+
+        checks:
+          type: object
+          required:
+            - api
+            - qdrant
+            - gemini_config
+          properties:
+            api:
+              type: string
+              enum:
+                - ok
+                - error
+              description: "API server status"
+              example: "ok"
+
+            qdrant:
+              type: string
+              enum:
+                - ok
+                - error
+              description: "Qdrant connection status"
+              example: "ok"
+
+            gemini_config:
+              type: string
+              enum:
+                - ok
+                - error
+              description: "Gemini API configuration status"
+              example: "ok"
+
+        timestamp:
+          type: string
+          format: date-time
+          description: "When the health check was performed (ISO 8601 UTC)"
+          example: "2025-12-06T10:35:00Z"
+
+  securitySchemes: {}
+
+security: []
