@@ -84,6 +84,51 @@ const config: Config = {
     ],
   ],
 
+  // Enable environment variables to be available in the browser
+  themes: [
+    '@docusaurus/theme-mermaid',
+    // Add plugin to inject environment variables
+    [
+      '@docusaurus/theme-classic',
+      {
+        customCss: './src/css/custom.css',
+      },
+    ],
+  ],
+
+ plugins: [
+    async function myPlugin(context, options) {
+      return {
+        name: 'docusaurus-custom-webpack-plugin',
+        configureWebpack(config, isServer) {
+          return {
+            resolve: {
+              // 1. Tell Webpack where to find the polyfills
+              fallback: {
+                process: require.resolve('process/browser'),
+                buffer: require.resolve('buffer'),
+              },
+            },
+            plugins: [
+              // 2. PROVIDE PLUGIN: This is what Qwen missed.
+              // It automatically creates the global 'process' variable.
+              new (require('webpack')).ProvidePlugin({
+                process: 'process/browser',
+              }),
+              
+              // 3. DEFINE PLUGIN: Replaces env variables with strings
+              new (require('webpack')).DefinePlugin({
+                'process.env.REACT_APP_BACKEND_URL': JSON.stringify(
+                  process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000/chat'
+                ),
+              }),
+            ],
+          };
+        },
+      };
+    },
+  ],
+
   themeConfig: {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',

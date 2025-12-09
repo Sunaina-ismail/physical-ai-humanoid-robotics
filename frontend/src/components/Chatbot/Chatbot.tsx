@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './Chatbot.module.css';
+import config from '../../config';
 
 interface Message {
   id: string;
@@ -76,9 +77,8 @@ const Chatbot: React.FC = () => {
         selected_text: selectedText || undefined,
       };
 
-      // Call the backend API - uses environment variable for production, falls back to localhost for development
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000/chat';
-      const response = await fetch(backendUrl, {
+      // Call the backend API using configuration
+      const response = await fetch(config.backendUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

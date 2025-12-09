@@ -71,7 +71,7 @@ Note: This would require modifying the CORS middleware in `app/main.py` to use t
 ## Build Configuration
 
 - **Build Command**: Railway will automatically run `pip install -r requirements.txt`
-- **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`
+- **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}`
 - **Runtime**: Python 3.10+ (as specified in the requirements)
 
 ## Post-Deployment Setup
