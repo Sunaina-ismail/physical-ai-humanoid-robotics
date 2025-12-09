@@ -76,8 +76,9 @@ const Chatbot: React.FC = () => {
         selected_text: selectedText || undefined,
       };
 
-      // Call the backend API
-      const response = await fetch('http://localhost:8000/chat', {
+      // Call the backend API - uses environment variable for production, falls back to localhost for development
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000/chat';
+      const response = await fetch(backendUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
