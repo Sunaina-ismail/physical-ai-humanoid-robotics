@@ -10,26 +10,19 @@ This document provides instructions for deploying the Physical AI & Humanoid Rob
 
 ## Environment Variables
 
-For production deployment, you'll need to configure the backend API URL in the frontend. Currently, the frontend is hardcoded to connect to `http://localhost:8000/chat`, but for production you'll need to update the code to use an environment variable.
-
-### Required Code Modification
-
-The frontend code currently has the backend URL hardcoded. You must modify the Chatbot component to use an environment variable:
-
-1. Update the API URL in `frontend/src/components/Chatbot/Chatbot.tsx` line 80:
-   ```typescript
-   const response = await fetch(process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000/chat', {
-   ```
+For production deployment, you need to configure the backend API URL in Vercel.
 
 ### Required Environment Variables in Vercel
 
-After modifying the code, set this environment variable in your Vercel project:
+Set this environment variable in your Vercel project settings:
 
 ```
-REACT_APP_BACKEND_URL=https://your-backend-app.up.railway.app/chat
+BACKEND_URL=https://your-backend-app.up.railway.app/chat
 ```
 
 Replace `https://your-backend-app.up.railway.app/chat` with your actual deployed Railway backend URL.
+
+**Note**: The frontend uses Docusaurus's `customFields` to access this environment variable at build time. Make sure to set this in Vercel's environment variables section before deploying.
 
 ### Additional Environment Variables
 
@@ -39,29 +32,24 @@ NODE_VERSION=20
 
 ## Deployment Steps
 
-1. **Prepare the Frontend for Production API URL**
-   - Update the hardcoded backend URL in `frontend/src/components/Chatbot/Chatbot.tsx`
-   - Replace `'http://localhost:8000/chat'` with your deployed backend URL
-   - Or implement environment variable support as shown above
-
-2. **Connect Your Repository**
+1. **Connect Your Repository**
    - Go to Vercel dashboard
    - Click "Add New Project"
    - Import your GitHub repository containing the Physical AI & Humanoid Robotics frontend
 
-3. **Configure the Project**
+2. **Configure the Project**
    - Root Directory: Select the `frontend` directory
    - Framework Preset: Docusaurus
    - Build Command: `yarn build` (or `npm run build`)
    - Output Directory: `build`
    - Install Command: `yarn install` (or `npm install`)
 
-4. **Set Environment Variables**
+3. **Set Environment Variables**
    - In the "Environment Variables" section, add:
      - `NODE_VERSION`: `20` (or your preferred Node version)
-     - `REACT_APP_BACKEND_URL`: Your deployed backend URL (e.g., `https://your-backend-app.up.railway.app/chat`)
+     - `BACKEND_URL`: Your deployed backend URL (e.g., `https://your-backend-app.up.railway.app/chat`)
 
-5. **Deploy**
+4. **Deploy**
    - Click "Deploy" to build and deploy your application
    - Vercel will automatically build your Docusaurus site
 

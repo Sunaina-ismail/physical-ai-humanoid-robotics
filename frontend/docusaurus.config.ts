@@ -9,6 +9,11 @@ const config: Config = {
   tagline: 'A Simulation-First Guide to ROS 2 and Vision-Language-Action Systems',
   favicon: 'img/favicon.ico',
 
+  // Custom fields for runtime configuration (accessible in components)
+  customFields: {
+    backendUrl: process.env.BACKEND_URL || 'http://localhost:8000/chat',
+  },
+
   markdown: {
     mermaid: true,
   },

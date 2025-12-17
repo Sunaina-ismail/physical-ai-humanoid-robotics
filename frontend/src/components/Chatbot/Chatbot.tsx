@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './Chatbot.module.css';
 
 interface Message {
@@ -16,6 +17,7 @@ interface Message {
 }
 
 const Chatbot: React.FC = () => {
+  const { siteConfig } = useDocusaurusContext();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -77,7 +79,7 @@ const Chatbot: React.FC = () => {
       };
 
       // Call the backend API - uses environment variable for production, falls back to localhost for development
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000/chat';
+      const backendUrl = (siteConfig.customFields?.backendUrl as string) || 'http://localhost:8000/chat';
       const response = await fetch(backendUrl, {
         method: 'POST',
         headers: {
