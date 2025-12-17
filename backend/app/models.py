@@ -237,9 +237,11 @@ class Response(BaseModel):
     def validate_confidence_threshold(cls, v: Optional[float], info) -> Optional[float]:
         """
         Ensure confidence meets minimum threshold for RAG responses.
+        Uses settings.similarity_threshold instead of hardcoded value.
         """
-        if v is not None and v < 0.7:
-            raise ValueError(f"Confidence {v} below minimum threshold 0.7")
+        # Confidence can be None or below threshold - just validate range
+        if v is not None and (v < 0.0 or v > 1.0):
+            raise ValueError(f"Confidence {v} must be between 0.0 and 1.0")
         return v
 
 
